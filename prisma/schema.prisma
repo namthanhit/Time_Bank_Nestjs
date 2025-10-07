@@ -1,16 +1,11 @@
-// schema.prisma
-
 generator client {
   provider = "prisma-client-js"
-  output   = "../generated/prisma"
 }
 
 datasource db {
   provider = "mysql"
   url      = env("DATABASE_URL")
 }
-
-/// ENUMS
 
 enum Gender {
   male
@@ -67,7 +62,7 @@ enum Visibility {
   hidden
 }
 
-enum ServiceRequestStatus {
+enum ServiceStatus {
   open
   matched
   cancelled
@@ -88,82 +83,101 @@ enum BookingStatus {
   cancelled
 }
 
-/// MODELS
-
 model User {
-  id             BigInt   @id @default(autoincrement())
-  full_name      String   @db.VarChar(100)
-  citizen_id     String   @unique @db.Char(64)
-  birth_date     DateTime
-  gender         Gender   @default(unknown)
-  specialization String?  @db.VarChar(100)
-  address        String?  @db.VarChar(255)
-  avatar_url     String?  @db.VarChar(255)
-  qr_code        String   @db.VarChar(255)
-  created_at     DateTime @default(now())
-  updated_at     DateTime @default(now()) @updatedAt
+  id          String   @id @default(cuid())
+  full_name   String   @db.VarChar(100)
+  citizen_id  String   @unique @db.Char(64)
+  phone       String   @unique @db.VarChar(20)
+  email       String?  @unique @db.VarChar(320)
+  qr_code     String   @db.VarChar(255)
+  avatar_url  String?  @db.VarChar(255)
+  created_at  DateTime @default(now())
+  updated_at  DateTime @default(now()) @updatedAt
 
-  // Relations
-  auth              Auth?
+  detail      UserDetail?
+  auth        Auth?
   verificationCodes VerificationCode[]
-  wallet            Wallet?
-  userServices      UserService[]
-  serviceRequests   ServiceRequest[]
-  offers            Offer[]
+  wallet      Wallet?
+  following   Follow[] @relation("UserFollows")
+  followers   Follow[] @relation("UserFollowed")
+  skills      UserSkill[]
+  services    Service[]
+  offers      Offer[]
   bookingsAsRequester Booking[] @relation("RequesterBookings")
   bookingsAsProvider  Booking[] @relation("ProviderBookings")
-  ratingsGiven      Rating[] @relation("RaterRatings")
-  ratingsReceived   Rating[] @relation("RateeRatings")
+  ratingsGiven        Rating[] @relation("RaterRatings")
+  ratingsReceived     Rating[] @relation("RateeRatings")
+}
+
+model UserDetail {
+  user_id       String   @id
+  birth_date    DateTime
+  description   String?  @db.VarChar(255)
+  address       String?  @db.VarChar(255)
+  work_address  String?  @db.VarChar(255)
+  study_address String?  @db.VarChar(255)
+  gender        Gender   @default(unknown)
+  social_network String? @db.VarChar(255)
+  updated_at    DateTime @default(now()) @updatedAt
+
+  user User @relation(fields: [user_id], references: [id], onDelete: Cascade)
+}
+
+model Follow {
+  id          String   @id @default(cuid())
+  follower_id String
+  followee_id String
+  created_at  DateTime @default(now())
+
+  follower User @relation("UserFollows", fields: [follower_id], references: [id], onDelete: Cascade)
+  followee User @relation("UserFollowed", fields: [followee_id], references: [id], onDelete: Cascade)
+
+  @@unique([follower_id, followee_id])
 }
 
 model Auth {
-  user_id             BigInt   @id
-  phone               String   @unique @db.VarChar(20)
-  email               String?  @unique @db.VarChar(320)
-  phone_verified_at   DateTime?
-  email_verified_at   DateTime?
-  password            String   @db.VarChar(255)
-  status              AuthStatus @default(active)
-  last_login_at       DateTime?
-  failed_attempts     Int      @default(0)
-  locked_until        DateTime?
-  pin                 String?  @db.VarChar(255)
-  pin_failed_attempts Int      @default(0)
-  pin_locked_until    DateTime?
-  pin_set_at          DateTime?
-  created_at          DateTime @default(now())
-  updated_at          DateTime @default(now()) @updatedAt
+  user_id           String @id
+  phone_verified_at DateTime?
+  email_verified_at DateTime?
+  password          String @db.VarChar(255)
+  status            AuthStatus @default(active)
+  last_login_at     DateTime?
+  failed_attempts   Int @default(0)
+  locked_until      DateTime?
+  pin               String? @db.VarChar(255)
+  pin_failed_attempts Int @default(0)
+  pin_locked_until  DateTime?
+  pin_set_at        DateTime?
+  created_at        DateTime @default(now())
+  updated_at        DateTime @default(now()) @updatedAt
 
-  // Relations
   user User @relation(fields: [user_id], references: [id], onDelete: Cascade)
 }
 
 model VerificationCode {
-  id          BigInt   @id @default(autoincrement())
-  user_id     BigInt?
+  id          String   @id @default(cuid())
+  user_id     String?
   channel     VerificationChannel
   purpose     VerificationPurpose
-  sent_to     String   @db.VarChar(320)
-  code        String   @db.Char(64)
-  attempts    Int      @default(0)
-  max_attempts Int     @default(5)
+  sent_to     String @db.VarChar(320)
+  code        String @db.Char(64)
+  attempts    Int @default(0)
+  max_attempts Int @default(5)
   expires_at  DateTime
   consumed_at DateTime?
   created_at  DateTime @default(now())
 
-  // Relations
   user User? @relation(fields: [user_id], references: [id], onDelete: SetNull)
 }
 
 model Wallet {
-  id         BigInt   @id @default(autoincrement())
-  user_id    BigInt   @unique
+  id         String   @id @default(cuid())
+  user_id    String   @unique
   secs       Int      @default(0)
   status     WalletStatus @default(active)
   created_at DateTime @default(now())
   updated_at DateTime @default(now()) @updatedAt
 
-  // Relations
   user          User @relation(fields: [user_id], references: [id], onDelete: Cascade)
   transfersFrom Transfer[] @relation("FromWallet")
   transfersTo   Transfer[] @relation("ToWallet")
@@ -171,9 +185,9 @@ model Wallet {
 }
 
 model Transfer {
-  id             BigInt   @id @default(autoincrement())
-  from_wallet_id BigInt
-  to_wallet_id   BigInt
+  id             String   @id @default(cuid())
+  from_wallet_id String
+  to_wallet_id   String
   secs           Int
   status         TransferStatus @default(pending)
   note           String? @db.VarChar(200)
@@ -182,99 +196,100 @@ model Transfer {
   cancelled_at   DateTime?
   failed_at      DateTime?
 
-  // Relations
   fromWallet Wallet @relation("FromWallet", fields: [from_wallet_id], references: [id], onDelete: Cascade)
   toWallet   Wallet @relation("ToWallet", fields: [to_wallet_id], references: [id], onDelete: Cascade)
 }
 
 model LedgerEntry {
-  id         BigInt   @id @default(autoincrement())
-  wallet_id  BigInt
+  id         String   @id @default(cuid())
+  wallet_id  String
   direction  LedgerDirection
   minutes    Int
   ref_type   LedgerRefType
-  ref_id     BigInt
+  ref_id     String
   memo       String? @db.VarChar(200)
   created_at DateTime @default(now())
 
-  // Relations
   wallet Wallet @relation(fields: [wallet_id], references: [id], onDelete: Cascade)
 }
 
 model Skill {
-  id        BigInt   @id @default(autoincrement())
-  parent_id BigInt?
+  id        String   @id @default(cuid())
+  parent_id String?
   name      String   @db.VarChar(80)
   slug      String   @unique @db.VarChar(100)
 
-  // Relations
   parent   Skill?   @relation("SkillHierarchy", fields: [parent_id], references: [id], onDelete: SetNull)
   children Skill[]  @relation("SkillHierarchy")
-  userServices      UserService[]
-  serviceRequests   ServiceRequest[]
+  userSkills   UserSkill[]
+  services     Service[]
+  serviceSkills ServiceSkill[]
 }
 
-model UserService {
-  id              BigInt   @id @default(autoincrement())
-  user_id         BigInt
-  skill_id        BigInt
-  title           String   @db.VarChar(120)
-  description     String?  @db.Text
-  region_code     String?  @db.VarChar(32)
-  min_slot_minutes Int     @default(60)
-  visibility      Visibility @default(public)
-  rating_avg      Decimal   @default(0.0) @db.Decimal(3,2)
-  rating_count    Int       @default(0)
-  created_at      DateTime  @default(now())
+model UserSkill {
+  user_id  String
+  skill_id String
 
-  // Relations
-  user  User  @relation(fields: [user_id], references: [id], onDelete: Cascade)
-  skill Skill @relation(fields: [skill_id], references: [id], onDelete: Cascade)
+  user  User  @relation(fields: [user_id], references: [id])
+  skill Skill @relation(fields: [skill_id], references: [id])
+
+  @@id([user_id, skill_id])
 }
 
-model ServiceRequest {
-  id               BigInt   @id @default(autoincrement())
-  requester_id     BigInt
-  skill_id         BigInt
-  title            String   @db.VarChar(120)
-  description      String?  @db.Text
-  region_code      String?  @db.VarChar(32)
-  place            String   @db.VarChar(255)
-  preferred_start  DateTime?
-  preferred_minutes Int
-  status           ServiceRequestStatus @default(open)
-  created_at       DateTime @default(now())
-  updated_at       DateTime @default(now()) @updatedAt
+model Service {
+  id             String   @id @default(cuid())
+  user_id        String
+  skill_id       String
+  title          String   @db.VarChar(120)
+  description    String?  @db.Text
+  region_code    String?  @db.VarChar(32)
+  place          String   @db.VarChar(255)
+  preferred_start DateTime?
+  time           Int
+  slot           Int      @default(60)
+  visibility     Visibility @default(public)
+  status         ServiceStatus @default(open)
+  created_at     DateTime @default(now())
+  updated_at     DateTime @default(now()) @updatedAt
 
-  // Relations
-  requester User  @relation(fields: [requester_id], references: [id], onDelete: Cascade)
-  skill     Skill @relation(fields: [skill_id], references: [id], onDelete: Cascade)
-  offers    Offer[]
-  bookings  Booking[]
+  user   User  @relation(fields: [user_id], references: [id], onDelete: Cascade)
+  skill  Skill @relation(fields: [skill_id], references: [id], onDelete: Cascade)
+  serviceSkills ServiceSkill[]
+  offers  Offer[]
+  bookings Booking[]
+}
+
+model ServiceSkill {
+  service_id String
+  skill_id   String
+
+  service Service @relation(fields: [service_id], references: [id])
+  skill   Skill   @relation(fields: [skill_id], references: [id])
+
+  @@id([service_id, skill_id])
 }
 
 model Offer {
-  id              BigInt   @id @default(autoincrement())
-  request_id      BigInt
-  provider_id     BigInt
+  id              String   @id @default(cuid())
+  request_id      String
+  provider_id     String
   proposed_start  DateTime?
   proposed_minutes Int
   note            String? @db.VarChar(200)
   status          OfferStatus @default(pending)
   created_at      DateTime @default(now())
 
-  // Relations
-  request  ServiceRequest @relation(fields: [request_id], references: [id], onDelete: Cascade)
-  provider User           @relation(fields: [provider_id], references: [id], onDelete: Cascade)
+  request  Service @relation(fields: [request_id], references: [id], onDelete: Cascade)
+  provider User    @relation(fields: [provider_id], references: [id], onDelete: Cascade)
   bookings Booking[]
 }
 
 model Booking {
-  id              BigInt   @id @default(autoincrement())
-  request_id      BigInt
-  offer_id        BigInt
-  requester_id    BigInt
-  provider_id     BigInt
+  id              String   @id @default(cuid())
+  request_id      String
+  offer_id        String
+  requester_id    String
+  provider_id     String
   start_at        DateTime
   minutes_booked  Int
   place           String? @db.VarChar(160)
@@ -283,24 +298,22 @@ model Booking {
   completed_at    DateTime?
   cancelled_at    DateTime?
 
-  // Relations
-  request   ServiceRequest @relation(fields: [request_id], references: [id], onDelete: Cascade)
-  offer     Offer          @relation(fields: [offer_id], references: [id], onDelete: Cascade)
-  requester User           @relation("RequesterBookings", fields: [requester_id], references: [id], onDelete: Cascade)
-  provider  User           @relation("ProviderBookings", fields: [provider_id], references: [id], onDelete: Cascade)
+  request   Service @relation(fields: [request_id], references: [id], onDelete: Cascade)
+  offer     Offer   @relation(fields: [offer_id], references: [id], onDelete: Cascade)
+  requester User    @relation("RequesterBookings", fields: [requester_id], references: [id], onDelete: Cascade)
+  provider  User    @relation("ProviderBookings", fields: [provider_id], references: [id], onDelete: Cascade)
   ratings   Rating[]
 }
 
 model Rating {
-  id         BigInt   @id @default(autoincrement())
-  booking_id BigInt
-  rater_id   BigInt
-  ratee_id   BigInt
+  id         String   @id @default(cuid())
+  booking_id String
+  rater_id   String
+  ratee_id   String
   stars      Int
   comment    String? @db.VarChar(300)
   created_at DateTime @default(now())
 
-  // Relations
   booking Booking @relation(fields: [booking_id], references: [id], onDelete: Cascade)
   rater   User    @relation("RaterRatings", fields: [rater_id], references: [id], onDelete: Cascade)
   ratee   User    @relation("RateeRatings", fields: [ratee_id], references: [id], onDelete: Cascade)
