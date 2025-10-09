@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { CreateUserDto } from './typings/create-user.dto';
-import { UpdateUserDto } from './typings/user.update.dto';
+import { UpdateUserDto } from './typings/users.dto';
 import { PrismaService } from 'src/infra/prisma/prisma.service';
 
 @Injectable()
@@ -48,6 +48,22 @@ export class UsersService {
     });
 
     if (!user) throw new Error("User not found");
+
+    const phoneExists = await this.prisma.user.findFirst({
+      where: {
+        phone: dto.phone,
+        id: { not: id },
+      },
+    });
+    if (phoneExists) throw new Error("Phone number already in use");
+    
+    const emailExists = await this.prisma.user.findFirst({
+      where: {
+        email: dto.email,
+        id: { not: id },
+      },
+    });
+    if (emailExists) throw new Error("Email already in use");
 
     //tạo transaction
     const result = await this.prisma.$transaction(async (tx) => {

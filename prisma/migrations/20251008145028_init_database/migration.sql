@@ -113,7 +113,7 @@ CREATE TABLE `LedgerEntry` (
     `id` VARCHAR(191) NOT NULL,
     `wallet_id` VARCHAR(191) NOT NULL,
     `direction` ENUM('debit', 'credit') NOT NULL,
-    `minutes` INTEGER NOT NULL,
+    `secs` INTEGER NOT NULL,
     `ref_type` ENUM('transfer', 'escrow', 'adjustment') NOT NULL,
     `ref_id` VARCHAR(191) NOT NULL,
     `memo` VARCHAR(200) NULL,
@@ -145,7 +145,6 @@ CREATE TABLE `UserSkill` (
 CREATE TABLE `Service` (
     `id` VARCHAR(191) NOT NULL,
     `user_id` VARCHAR(191) NOT NULL,
-    `skill_id` VARCHAR(191) NOT NULL,
     `title` VARCHAR(120) NOT NULL,
     `description` TEXT NULL,
     `region_code` VARCHAR(32) NULL,
@@ -153,8 +152,8 @@ CREATE TABLE `Service` (
     `preferred_start` DATETIME(3) NULL,
     `time` INTEGER NOT NULL,
     `slot` INTEGER NOT NULL DEFAULT 60,
-    `visibility` ENUM('public', 'hidden') NOT NULL DEFAULT 'public',
-    `status` ENUM('open', 'matched', 'cancelled', 'expired') NOT NULL DEFAULT 'open',
+    `visibility` ENUM('public', 'friends', 'hidden') NOT NULL DEFAULT 'public',
+    `status` ENUM('open', 'matched', 'completed', 'cancelled', 'expired') NOT NULL DEFAULT 'open',
     `created_at` DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
     `updated_at` DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
 
@@ -175,7 +174,7 @@ CREATE TABLE `Offer` (
     `request_id` VARCHAR(191) NOT NULL,
     `provider_id` VARCHAR(191) NOT NULL,
     `proposed_start` DATETIME(3) NULL,
-    `proposed_minutes` INTEGER NOT NULL,
+    `secs` INTEGER NOT NULL,
     `note` VARCHAR(200) NULL,
     `status` ENUM('pending', 'accepted', 'rejected', 'withdrawn') NOT NULL DEFAULT 'pending',
     `created_at` DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
@@ -191,7 +190,7 @@ CREATE TABLE `Booking` (
     `requester_id` VARCHAR(191) NOT NULL,
     `provider_id` VARCHAR(191) NOT NULL,
     `start_at` DATETIME(3) NOT NULL,
-    `minutes_booked` INTEGER NOT NULL,
+    `secs_booked` INTEGER NOT NULL,
     `place` VARCHAR(160) NULL,
     `status` ENUM('scheduled', 'in_progress', 'completed', 'cancelled') NOT NULL DEFAULT 'scheduled',
     `created_at` DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
@@ -254,13 +253,10 @@ ALTER TABLE `UserSkill` ADD CONSTRAINT `UserSkill_skill_id_fkey` FOREIGN KEY (`s
 ALTER TABLE `Service` ADD CONSTRAINT `Service_user_id_fkey` FOREIGN KEY (`user_id`) REFERENCES `User`(`id`) ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE `Service` ADD CONSTRAINT `Service_skill_id_fkey` FOREIGN KEY (`skill_id`) REFERENCES `Skill`(`id`) ON DELETE CASCADE ON UPDATE CASCADE;
+ALTER TABLE `ServiceSkill` ADD CONSTRAINT `ServiceSkill_service_id_fkey` FOREIGN KEY (`service_id`) REFERENCES `Service`(`id`) ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE `ServiceSkill` ADD CONSTRAINT `ServiceSkill_service_id_fkey` FOREIGN KEY (`service_id`) REFERENCES `Service`(`id`) ON DELETE RESTRICT ON UPDATE CASCADE;
-
--- AddForeignKey
-ALTER TABLE `ServiceSkill` ADD CONSTRAINT `ServiceSkill_skill_id_fkey` FOREIGN KEY (`skill_id`) REFERENCES `Skill`(`id`) ON DELETE RESTRICT ON UPDATE CASCADE;
+ALTER TABLE `ServiceSkill` ADD CONSTRAINT `ServiceSkill_skill_id_fkey` FOREIGN KEY (`skill_id`) REFERENCES `Skill`(`id`) ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
 ALTER TABLE `Offer` ADD CONSTRAINT `Offer_request_id_fkey` FOREIGN KEY (`request_id`) REFERENCES `Service`(`id`) ON DELETE CASCADE ON UPDATE CASCADE;

@@ -59,12 +59,14 @@ enum LedgerRefType {
 
 enum Visibility {
   public
+  friends
   hidden
 }
 
 enum ServiceStatus {
   open
   matched
+  completed
   cancelled
   expired
 }
@@ -204,7 +206,7 @@ model LedgerEntry {
   id         String   @id @default(cuid())
   wallet_id  String
   direction  LedgerDirection
-  minutes    Int
+  secs       Int
   ref_type   LedgerRefType
   ref_id     String
   memo       String? @db.VarChar(200)
@@ -221,8 +223,7 @@ model Skill {
 
   parent   Skill?   @relation("SkillHierarchy", fields: [parent_id], references: [id], onDelete: SetNull)
   children Skill[]  @relation("SkillHierarchy")
-  userSkills   UserSkill[]
-  services     Service[]
+  userSkills    UserSkill[]
   serviceSkills ServiceSkill[]
 }
 
@@ -237,23 +238,21 @@ model UserSkill {
 }
 
 model Service {
-  id             String   @id @default(cuid())
-  user_id        String
-  skill_id       String
-  title          String   @db.VarChar(120)
-  description    String?  @db.Text
-  region_code    String?  @db.VarChar(32)
-  place          String   @db.VarChar(255)
+  id              String   @id @default(cuid())
+  user_id         String
+  title           String   @db.VarChar(120)
+  description     String?  @db.Text
+  region_code     String?  @db.VarChar(32)
+  place           String   @db.VarChar(255)
   preferred_start DateTime?
-  time           Int
-  slot           Int      @default(60)
-  visibility     Visibility @default(public)
-  status         ServiceStatus @default(open)
-  created_at     DateTime @default(now())
-  updated_at     DateTime @default(now()) @updatedAt
+  time            Int
+  slot            Int @default(60)
+  visibility      Visibility @default(public)
+  status          ServiceStatus @default(open)
+  created_at      DateTime @default(now())
+  updated_at      DateTime @default(now()) @updatedAt
 
-  user   User  @relation(fields: [user_id], references: [id], onDelete: Cascade)
-  skill  Skill @relation(fields: [skill_id], references: [id], onDelete: Cascade)
+  user User @relation(fields: [user_id], references: [id], onDelete: Cascade)
   serviceSkills ServiceSkill[]
   offers  Offer[]
   bookings Booking[]
@@ -263,8 +262,8 @@ model ServiceSkill {
   service_id String
   skill_id   String
 
-  service Service @relation(fields: [service_id], references: [id])
-  skill   Skill   @relation(fields: [skill_id], references: [id])
+  service Service @relation(fields: [service_id], references: [id], onDelete: Cascade)
+  skill   Skill   @relation(fields: [skill_id], references: [id], onDelete: Cascade)
 
   @@id([service_id, skill_id])
 }
@@ -274,7 +273,7 @@ model Offer {
   request_id      String
   provider_id     String
   proposed_start  DateTime?
-  proposed_minutes Int
+  secs            Int
   note            String? @db.VarChar(200)
   status          OfferStatus @default(pending)
   created_at      DateTime @default(now())
@@ -291,7 +290,7 @@ model Booking {
   requester_id    String
   provider_id     String
   start_at        DateTime
-  minutes_booked  Int
+  secs_booked     Int
   place           String? @db.VarChar(160)
   status          BookingStatus @default(scheduled)
   created_at      DateTime @default(now())
