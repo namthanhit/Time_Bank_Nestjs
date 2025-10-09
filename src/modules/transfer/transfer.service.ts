@@ -1,4 +1,3 @@
-// transfer.service.ts
 import { BadRequestException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../../infra/prisma/prisma.service';
 import { CheckDto } from './dtos/check.dto';
