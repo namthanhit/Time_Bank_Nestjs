@@ -7,32 +7,6 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-enum Gender {
-  male
-  female
-  other
-  unknown
-}
-
-enum AuthStatus {
-  pending
-  active
-  suspended
-  banned
-}
-
-enum VerificationChannel {
-  sms
-  email
-}
-
-enum VerificationPurpose {
-  signup
-  phone_change
-  email_change
-  reset_password
-}
-
 enum WalletStatus {
   active
   frozen
@@ -59,12 +33,14 @@ enum LedgerRefType {
 
 enum Visibility {
   public
+  friends
   hidden
 }
 
 enum ServiceStatus {
   open
   matched
+  completed
   cancelled
   expired
 }
@@ -83,91 +59,198 @@ enum BookingStatus {
   cancelled
 }
 
-model User {
-  id         String   @id @default(cuid())
-  full_name  String   @db.VarChar(100)
-  citizen_id String   @unique @db.Char(64)
-  phone      String   @unique @db.VarChar(20)
-  email      String?  @unique @db.VarChar(320)
-  qr_code    String   @db.VarChar(255)
-  avatar_url String?  @db.VarChar(255)
-  created_at DateTime @default(now())
-  updated_at DateTime @default(now()) @updatedAt
-
-  detail              UserDetail?
-  auth                Auth?
-  verificationCodes   VerificationCode[]
-  wallet              Wallet?
-  following           Follow[]           @relation("UserFollows")
-  followers           Follow[]           @relation("UserFollowed")
-  skills              UserSkill[]
-  services            Service[]
-  offers              Offer[]
-  bookingsAsRequester Booking[]          @relation("RequesterBookings")
-  bookingsAsProvider  Booking[]          @relation("ProviderBookings")
-  ratingsGiven        Rating[]           @relation("RaterRatings")
-  ratingsReceived     Rating[]           @relation("RateeRatings")
+enum UserStatus {
+  draft
+  pending
+  active
+  suspended
+  banned
 }
 
-model UserDetail {
-  user_id        String   @id
-  birth_date     DateTime
-  description    String?  @db.VarChar(255)
-  address        String?  @db.VarChar(255)
-  work_address   String?  @db.VarChar(255)
-  study_address  String?  @db.VarChar(255)
-  gender         Gender   @default(unknown)
-  social_network String?  @db.VarChar(255)
-  updated_at     DateTime @default(now()) @updatedAt
+enum Gender {
+  male
+  female
+  other
+  unknown
+}
 
-  user User @relation(fields: [user_id], references: [id], onDelete: Cascade)
+enum VerificationChannel {
+  sms
+  email
+}
+
+enum VerificationPurpose {
+  signup
+  phone_change
+  email_change
+  reset_password
+  mfa
+}
+
+enum SignupStep {
+  init
+  otp_sent
+  verified
+  personal_info
+  pin_set
+  password_set
+  completed
+}
+
+enum TwoFactorMethod {
+  sms
+  email
+  app
+}
+
+model User {
+  id                 String      @id @default(cuid())                    // Khóa chính dạng chuỗi cuid()
+  full_name          String      @db.VarChar(150)                        // Họ và tên đầy đủ
+  citizen_id         String?     @unique @db.VarChar(64)                 // CCCD (tùy chọn, duy nhất)
+  phone              String      @unique @db.VarChar(32)                 // Số điện thoại (duy nhất)
+  email              String?     @unique @db.VarChar(320)                // Email (tùy chọn, duy nhất)
+  qr_code            String?     @db.VarChar(255)                        // Mã QR người dùng
+  avatar_url         String?     @db.VarChar(255)                        // Ảnh đại diện
+  status             UserStatus  @default(draft)                         // Trạng thái người dùng
+  preferred_locale   String?     @db.VarChar(10)                         // Ngôn ngữ ưa thích
+  created_at         DateTime    @default(now())                         // Thời điểm tạo
+  updated_at         DateTime    @updatedAt                              // Thời điểm cập nhật
+  deleted_at         DateTime?                                          // Thời điểm xóa mềm (soft delete)
+
+  // Quan hệ
+  detail             UserDetail?                                        // 1-1 với user_details
+  auth               Auth?                                             // 1-1 với auths
+  verification_codes VerificationCode[]                                // 1-n với verification_codes
+  signup_sessions    SignupSession[]                                   // 1-n với signup_sessions
+  refresh_tokens     RefreshToken[]                                    // 1-n với refresh_tokens
+
+  following Follow[] @relation("UserFollows")
+
+  followers Follow[] @relation("UserFollowed")
+
+  Wallet Wallet[]
+
+  UserSkill UserSkill[]
+
+  Service Service[]
+
+  Offer Offer[]
+
+  requesterBookings Booking[] @relation("RequesterBookings")
+
+  providerBookings Booking[] @relation("ProviderBookings")
+
+  rateeRatings Rating[] @relation("RateeRatings")
+
+  raterRatings Rating[] @relation("RaterRatings")
+}
+
+/// ==============================
+///  MODEL user_details
+/// ==============================
+model UserDetail {
+  user_id        String    @id                                         // Dùng user_id làm PK
+  birth_date     DateTime?                                              // Ngày sinh
+  gender         Gender    @default(unknown)                            // Giới tính
+  description    String?   @db.VarChar(512)                             // Mô tả cá nhân
+  address        String?   @db.VarChar(255)                             // Địa chỉ nhà
+  work_address   String?   @db.VarChar(255)                             // Địa chỉ làm việc
+  study_address  String?   @db.VarChar(255)                             // Địa chỉ học tập
+  social_network Json?                                                  // Thông tin mạng xã hội
+  updated_at     DateTime  @updatedAt                                   // Thời điểm cập nhật
+
+  // Quan hệ
+  user           User      @relation(fields: [user_id], references: [id], onDelete: Cascade)
+}
+
+/// ==============================
+///  MODEL auths
+/// ==============================
+model Auth {
+  user_id             String     @id                                    // Dùng user_id làm PK
+  password            String?    @db.VarChar(255)                       // Hash mật khẩu
+  password_changed_at DateTime?                                         // Thời điểm đổi mật khẩu
+  phone_verified_at   DateTime?                                         // Xác thực số điện thoại
+  email_verified_at   DateTime?                                         // Xác thực email
+  mfa_enabled         Boolean    @default(false)                        // Đã bật MFA chưa
+  two_factor_method   TwoFactorMethod?                                  // Phương thức 2FA
+  failed_attempts     Int        @default(0)                            // Số lần đăng nhập sai
+  locked_until        DateTime?                                         // Khóa đến thời điểm nào
+  pin                 String?    @db.VarChar(255)                       // Hash của mã PIN
+  pin_set_at          DateTime?                                         // Ngày đặt PIN
+  pin_failed_attempts Int        @default(0)                            // Số lần nhập PIN sai
+  pin_locked_until    DateTime?                                         // Thời điểm khóa PIN
+  created_at          DateTime   @default(now())                        // Tạo lúc
+  updated_at          DateTime   @updatedAt                             // Cập nhật lúc
+
+  // Quan hệ
+  user                User       @relation(fields: [user_id], references: [id], onDelete: Cascade)
+}
+
+/// ==============================
+///  MODEL verification_codes
+/// ==============================
+model VerificationCode {
+  id            BigInt                @id @default(autoincrement())      // Khóa chính tự tăng
+  user_id       String?                                                  // Tham chiếu user (nullable)
+  channel       VerificationChannel                                   // Kênh gửi mã (SMS/Email)
+  purpose       VerificationPurpose                                   // Mục đích (signup, reset_password, ...)
+  sent_to       String                @db.VarChar(320)                  // Nơi gửi tới (số hoặc email)
+  code_hash     String                @db.VarChar(255)                  // Hash của mã OTP
+  code_length   Int                   @default(6)                       // Độ dài mã
+  attempts      Int                   @default(0)                       // Số lần thử nhập
+  max_attempts  Int                   @default(5)                       // Giới hạn số lần nhập sai
+  expires_at    DateTime                                              // Hết hạn
+  consumed_at   DateTime?                                             // Đã sử dụng
+  created_at    DateTime              @default(now())                   // Thời điểm tạo
+
+  // Quan hệ
+  user          User?                 @relation(fields: [user_id], references: [id], onDelete: SetNull)
+}
+
+/// ==============================
+///  MODEL signup_sessions
+/// ==============================
+model SignupSession {
+  id                  String         @id @default(cuid())                // ID dạng cuid() (UUID string)
+  user_id             String?                                           // User liên kết (nullable)
+  session_token_hash  String         @db.VarChar(255)                   // Hash của token trả về client
+  current_step        SignupStep     @default(init)                     // Bước hiện tại trong signup flow
+  expires_at          DateTime                                          // Hết hạn session
+  ip                  String?        @db.VarChar(45)                    // IP tạo session
+  created_at          DateTime       @default(now())                    // Ngày tạo
+
+  // Quan hệ
+  user                User?          @relation(fields: [user_id], references: [id], onDelete: Cascade)
+}
+
+/// ==============================
+///  MODEL refresh_tokens
+/// ==============================
+model RefreshToken {
+  id           BigInt     @id @default(autoincrement())                 // Khóa chính
+  user_id      String                                             // FK tới user
+  token_hash   String      @db.VarChar(255)                            // Hash token
+  device_info  String?     @db.VarChar(255)                            // Thông tin thiết bị
+  ip           String?     @db.VarChar(45)                             // IP đăng nhập
+  expires_at   DateTime                                              // Thời điểm hết hạn
+  revoked_at   DateTime?                                             // Nếu bị revoke
+  created_at   DateTime     @default(now())                            // Thời điểm tạo
+
+  // Quan hệ
+  user         User        @relation(fields: [user_id], references: [id], onDelete: Cascade)
 }
 
 model Follow {
   id          String   @id @default(cuid())
-  follower_id String
-  followee_id String
+  follower_id String   // người đi theo dõi
+  followee_id String   // người được theo dõi
   created_at  DateTime @default(now())
 
   follower User @relation("UserFollows", fields: [follower_id], references: [id], onDelete: Cascade)
   followee User @relation("UserFollowed", fields: [followee_id], references: [id], onDelete: Cascade)
 
   @@unique([follower_id, followee_id])
-}
-
-model Auth {
-  user_id             String     @id
-  phone_verified_at   DateTime?
-  email_verified_at   DateTime?
-  password            String     @db.VarChar(255)
-  status              AuthStatus @default(active)
-  last_login_at       DateTime?
-  failed_attempts     Int        @default(0)
-  locked_until        DateTime?
-  pin                 String?    @db.VarChar(255)
-  pin_failed_attempts Int        @default(0)
-  pin_locked_until    DateTime?
-  pin_set_at          DateTime?
-  created_at          DateTime   @default(now())
-  updated_at          DateTime   @default(now()) @updatedAt
-
-  user User @relation(fields: [user_id], references: [id], onDelete: Cascade)
-}
-
-model VerificationCode {
-  id           String              @id @default(cuid())
-  user_id      String?
-  channel      VerificationChannel
-  purpose      VerificationPurpose
-  sent_to      String              @db.VarChar(320)
-  code         String              @db.Char(64)
-  attempts     Int                 @default(0)
-  max_attempts Int                 @default(5)
-  expires_at   DateTime
-  consumed_at  DateTime?
-  created_at   DateTime            @default(now())
-
-  user User? @relation(fields: [user_id], references: [id], onDelete: SetNull)
 }
 
 model Wallet {
@@ -222,7 +305,6 @@ model Skill {
   parent        Skill?         @relation("SkillHierarchy", fields: [parent_id], references: [id], onDelete: SetNull)
   children      Skill[]        @relation("SkillHierarchy")
   userSkills    UserSkill[]
-  services      Service[]
   serviceSkills ServiceSkill[]
 }
 
@@ -237,44 +319,43 @@ model UserSkill {
 }
 
 model Service {
-  id              String        @id @default(cuid())
+  id              String   @id @default(cuid())
   user_id         String
-  skill_id        String
-  title           String        @db.VarChar(120)
-  description     String?       @db.Text
-  region_code     String?       @db.VarChar(32)
-  place           String        @db.VarChar(255)
+  title           String   @db.VarChar(120)
+  description     String?  @db.Text
+  region_code     String?  @db.VarChar(32)
+  place           String   @db.VarChar(255)
   preferred_start DateTime?
   time            Int
-  slot            Int           @default(60)
-  visibility      Visibility    @default(public)
+  slot            Int @default(60)
+  visibility      Visibility @default(public)
   status          ServiceStatus @default(open)
-  created_at      DateTime      @default(now())
-  updated_at      DateTime      @default(now()) @updatedAt
+  created_at      DateTime @default(now())
+  updated_at      DateTime @default(now()) @updatedAt
 
-  user          User           @relation(fields: [user_id], references: [id], onDelete: Cascade)
-  skill         Skill          @relation(fields: [skill_id], references: [id], onDelete: Cascade)
+  user User @relation(fields: [user_id], references: [id], onDelete: Cascade)
   serviceSkills ServiceSkill[]
-  offers        Offer[]
-  bookings      Booking[]
+  offers  Offer[]
+  bookings Booking[]
 }
 
 model ServiceSkill {
   service_id String
   skill_id   String
 
-  service Service @relation(fields: [service_id], references: [id])
-  skill   Skill   @relation(fields: [skill_id], references: [id])
+  service Service @relation(fields: [service_id], references: [id], onDelete: Cascade)
+  skill   Skill   @relation(fields: [skill_id], references: [id], onDelete: Cascade)
 
   @@id([service_id, skill_id])
 }
+
 
 model Offer {
   id               String      @id @default(cuid())
   request_id       String
   provider_id      String
   proposed_start   DateTime?
-  proposed_minutes Int
+  proposed_secs    Int
   note             String?     @db.VarChar(200)
   status           OfferStatus @default(pending)
   created_at       DateTime    @default(now())
@@ -291,7 +372,7 @@ model Booking {
   requester_id   String
   provider_id    String
   start_at       DateTime
-  minutes_booked Int
+  secs_booked    Int
   place          String?       @db.VarChar(160)
   status         BookingStatus @default(scheduled)
   created_at     DateTime      @default(now())

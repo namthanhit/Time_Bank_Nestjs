@@ -2,11 +2,11 @@ import { BadRequestException, ForbiddenException, Injectable, NotFoundException 
 import { PrismaService } from '../../infra/prisma/prisma.service';
 import { CheckDto } from './dtos/check.dto';
 import { CreateTransferDto } from './dtos/create-transfer.dto';
-import { AuthStatus, LedgerDirection, LedgerRefType, TransferStatus, WalletStatus } from '@prisma/client';
+import { UserStatus, LedgerDirection, LedgerRefType, TransferStatus, WalletStatus } from '@prisma/client';
 import * as argon2 from 'argon2';
 
 const PIN_MAX_FAILS = 5;
-const PIN_LOCK_MINUTES = 10;
+const PIN_LOCK_MINUTES = 5;
 
 @Injectable()
 export class TransferService {
@@ -56,10 +56,14 @@ export class TransferService {
     // verify PIN
     const auth = await this.prisma.auth.findUnique({
       where: { user_id: fromUserId },
-      select: { status: true, pin: true, pin_failed_attempts: true, pin_locked_until: true },
+      select: { pin: true, pin_failed_attempts: true, pin_locked_until: true },
+    });
+    const user_status = await this.prisma.user.findUnique({
+      where: { id: fromUserId },
+      select: { status: true},
     });
     if (!auth) throw new ForbiddenException('Tài khoản chưa sẵn sàng');
-    if (auth.status !== AuthStatus.active) throw new ForbiddenException('Tài khoản không hoạt động');
+    if (user_status?.status !== UserStatus.active) throw new ForbiddenException('Tài khoản không hoạt động');
     if (!auth.pin) throw new ForbiddenException('Bạn chưa thiết lập PIN');
 
     const now = new Date();
@@ -130,11 +134,7 @@ export class TransferService {
           note: transfer.note,
           created_at: transfer.created_at,
           completed_at: transfer.completed_at,
-        },
-        balances: {
-          from_after: updatedFrom.secs,
-          to_after: updatedTo.secs,
-        },
+        }
       };
     });
   }
