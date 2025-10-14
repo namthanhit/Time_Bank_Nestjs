@@ -5,6 +5,8 @@ import { WalletModule } from './modules/wallet/wallet.module';
 import { LedgerModule } from './modules/ledger/ledger.module';
 import { FakeAuthMiddleware } from './common/middlewares/fake-auth.middleware';
 import { TransferModule } from './modules/transfer/transfer.module';
+import { SignupModule } from './modules/signup/signup.module';
+import { PhoneTokenModule } from './common/crypto/phone-token.module';
 
 @Module({
   imports: [
@@ -13,12 +15,14 @@ import { TransferModule } from './modules/transfer/transfer.module';
     WalletModule,
     LedgerModule,
     TransferModule,
+    SignupModule,
+    PhoneTokenModule,
   ],
   controllers: [],
   providers: [],
 })
-export class AppModule implements NestModule {
-  configure(consumer: MiddlewareConsumer) {
-    consumer.apply(FakeAuthMiddleware).forRoutes('');
-  }
-}
+export class AppModule {} //implements NestModule {
+//   configure(consumer: MiddlewareConsumer) {
+//     consumer.apply(FakeAuthMiddleware).forRoutes('');
+//   }
+// }
