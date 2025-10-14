@@ -1,5 +1,5 @@
 import {
-  IsDateString, IsEnum, IsNotEmpty, IsOptional, IsString,
+  IsDateString, IsEnum, IsNotEmpty, IsOptional, IsString,IsArray,
   Length, MaxLength, MinLength, ValidateNested
 } from 'class-validator';
 import { Type } from 'class-transformer';
@@ -40,4 +40,7 @@ export class CreateFromPhoneTokenDto {
 
   @IsString() @MinLength(8)
   password!: string;
+
+  @IsOptional() @IsString()
+  skill_id?: string;
 }

@@ -7,6 +7,7 @@ import { FakeAuthMiddleware } from './common/middlewares/fake-auth.middleware';
 import { TransferModule } from './modules/transfer/transfer.module';
 import { SignupModule } from './modules/signup/signup.module';
 import { PhoneTokenModule } from './common/crypto/phone-token.module';
+import { SkillsModule } from './modules/skill/skills.module';
 
 @Module({
   imports: [
@@ -17,6 +18,7 @@ import { PhoneTokenModule } from './common/crypto/phone-token.module';
     TransferModule,
     SignupModule,
     PhoneTokenModule,
+    SkillsModule,
   ],
   controllers: [],
   providers: [],
