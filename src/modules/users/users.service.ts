@@ -49,6 +49,20 @@ export class UsersService {
 
     if (!user) throw new Error("User not found");
 
+    const existingEmailUser = await this.prisma.user.findUnique({
+      where: { email: dto.email },
+    });
+    if (existingEmailUser && existingEmailUser.id !== id) {
+      throw new Error("Email already in use");
+    }
+
+    const existingPhoneUser = await this.prisma.user.findUnique({
+      where: { phone: dto.phone },
+    });
+    if (existingPhoneUser && existingPhoneUser.id !== id) {
+      throw new Error("Phone number already in use");
+    }
+
     //tạo transaction
     const result = await this.prisma.$transaction(async (tx) => {
       await tx.user.update({

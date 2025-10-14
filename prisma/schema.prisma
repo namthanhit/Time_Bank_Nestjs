@@ -33,12 +33,14 @@ enum LedgerRefType {
 
 enum Visibility {
   public
+  friends
   hidden
 }
 
 enum ServiceStatus {
   open
   matched
+  completed
   cancelled
   expired
 }
@@ -241,8 +243,8 @@ model RefreshToken {
 
 model Follow {
   id          String   @id @default(cuid())
-  follower_id String
-  followee_id String
+  follower_id String   // người đi theo dõi
+  followee_id String   // người được theo dõi
   created_at  DateTime @default(now())
 
   follower User @relation("UserFollows", fields: [follower_id], references: [id], onDelete: Cascade)
@@ -303,7 +305,6 @@ model Skill {
   parent        Skill?         @relation("SkillHierarchy", fields: [parent_id], references: [id], onDelete: SetNull)
   children      Skill[]        @relation("SkillHierarchy")
   userSkills    UserSkill[]
-  services      Service[]
   serviceSkills ServiceSkill[]
 }
 
@@ -318,37 +319,36 @@ model UserSkill {
 }
 
 model Service {
-  id              String        @id @default(cuid())
+  id              String   @id @default(cuid())
   user_id         String
-  skill_id        String
-  title           String        @db.VarChar(120)
-  description     String?       @db.Text
-  region_code     String?       @db.VarChar(32)
-  place           String        @db.VarChar(255)
+  title           String   @db.VarChar(120)
+  description     String?  @db.Text
+  region_code     String?  @db.VarChar(32)
+  place           String   @db.VarChar(255)
   preferred_start DateTime?
-  secs            Int
-  slot            Int           @default(60)
-  visibility      Visibility    @default(public)
+  time            Int
+  slot            Int @default(60)
+  visibility      Visibility @default(public)
   status          ServiceStatus @default(open)
-  created_at      DateTime      @default(now())
-  updated_at      DateTime      @default(now()) @updatedAt
+  created_at      DateTime @default(now())
+  updated_at      DateTime @default(now()) @updatedAt
 
-  user          User           @relation(fields: [user_id], references: [id], onDelete: Cascade)
-  skill         Skill          @relation(fields: [skill_id], references: [id], onDelete: Cascade)
+  user User @relation(fields: [user_id], references: [id], onDelete: Cascade)
   serviceSkills ServiceSkill[]
-  offers        Offer[]
-  bookings      Booking[]
+  offers  Offer[]
+  bookings Booking[]
 }
 
 model ServiceSkill {
   service_id String
   skill_id   String
 
-  service Service @relation(fields: [service_id], references: [id])
-  skill   Skill   @relation(fields: [skill_id], references: [id])
+  service Service @relation(fields: [service_id], references: [id], onDelete: Cascade)
+  skill   Skill   @relation(fields: [skill_id], references: [id], onDelete: Cascade)
 
   @@id([service_id, skill_id])
 }
+
 
 model Offer {
   id               String      @id @default(cuid())

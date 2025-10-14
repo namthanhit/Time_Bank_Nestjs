@@ -5,6 +5,7 @@ import { WalletModule } from './modules/wallet/wallet.module';
 import { LedgerModule } from './modules/ledger/ledger.module';
 import { FakeAuthMiddleware } from './common/middlewares/fake-auth.middleware';
 import { TransferModule } from './modules/transfer/transfer.module';
+import { JobsModule } from './modules/jobs/jobs.module';
 
 @Module({
   imports: [
@@ -13,6 +14,7 @@ import { TransferModule } from './modules/transfer/transfer.module';
     WalletModule,
     LedgerModule,
     TransferModule,
+    JobsModule,
   ],
   controllers: [],
   providers: [],
