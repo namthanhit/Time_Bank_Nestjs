@@ -8,7 +8,7 @@ export class SkillsService {
   async listAll() {
     // có thể thêm orderBy tuỳ ý
     const data = await this.prisma.skill.findMany({
-      orderBy: { name: 'asc' },
+      orderBy: { id: 'asc' },
       select: { id: true, parent_id: true, name: true, slug: true },
     });
     return { data };
