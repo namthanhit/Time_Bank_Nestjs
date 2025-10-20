@@ -6,6 +6,8 @@ import { LedgerModule } from './modules/ledger/ledger.module';
 import { FakeAuthMiddleware } from './common/middlewares/fake-auth.middleware';
 import { TransferModule } from './modules/transfer/transfer.module';
 import { JobsModule } from './modules/jobs/jobs.module';
+import { OffersModule } from './modules/offers/offers.module';
+import { RegionModule } from './modules/region/region.module';
 
 @Module({
   imports: [
@@ -15,6 +17,8 @@ import { JobsModule } from './modules/jobs/jobs.module';
     LedgerModule,
     TransferModule,
     JobsModule,
+    OffersModule,
+    RegionModule,
   ],
   controllers: [],
   providers: [],
