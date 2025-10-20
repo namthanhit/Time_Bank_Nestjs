@@ -9,19 +9,18 @@ export class UsersService {
     private readonly prisma: PrismaService,
   ) {}
 
-  //để tạm thời để fake user
-  async create(data: CreateUserDto) {
-    return this.prisma.user.create({
-      data: {
-        full_name: data.full_name,
-        citizen_id: data.citizen_id,
-        phone: data.phone,
-        email: data.email,
-        qr_code: data.qr_code ?? `QR-${Date.now()}`,
-        avatar_url: data.avatar_url,
-      },
-    });
-  }
+  // //để tạm thời để fake user
+  // async create(data: CreateUserDto) {
+  //   return this.prisma.user.create({
+  //     data: {
+  //       full_name: data.full_name,
+  //       citizen_id: data.citizen_id,
+  //       phone: data.phone,
+  //       email: data.email,
+  //       qr_code: data.qr_code ?? `QR-${Date.now()}`
+  //     },
+  //   });
+  // }
 
   async findAll() {
     return this.prisma.user.findMany();
@@ -83,7 +82,7 @@ export class UsersService {
           data: {
             birth_date: dto.birth_date,
             description: dto.description,
-            address: dto.address,
+            //address: dto.address,
             work_address: dto.work_address,
             study_address: dto.study_address,
             social_network: dto.social_network,

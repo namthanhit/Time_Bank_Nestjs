@@ -1,6 +1,4 @@
 import { ArgumentMetadata, Injectable, PipeTransform } from '@nestjs/common';
-// Provide no-op decorators when @nestjs/swagger is not available to avoid TS errors
-// These serve only as placeholders so the DTO typings work without the package.
 export function ApiProperty(_opts?: any): PropertyDecorator {
   return () => {};
 }
