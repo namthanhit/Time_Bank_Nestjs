@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
 import { CreateJobDto } from './typings/job.dto';
 import { PrismaService } from 'src/infra/prisma/prisma.service';
 import { JobStatus, JobVisibility } from './typings/job.enum';
@@ -24,11 +24,11 @@ export class JobsService {
       (id) => !validatedSkillIds.includes(id),
     );
     if (invalidSkillIds.length > 0)
-      throw new Error(`Invalid skill IDs: ${invalidSkillIds.join(', ')}`);
+      throw new NotFoundException(`Invalid skill IDs: ${invalidSkillIds.join(', ')}`);
 
     const preferred_start_time = new Date(createJobDto.preferred_start_time);
     if (preferred_start_time < new Date())
-      throw new Error('Preferred start time must be in the future');
+      throw new NotFoundException('Preferred start time must be in the future');
 
     return { validatedSkillIds, preferred_start_time };
   }
@@ -63,7 +63,7 @@ export class JobsService {
     await this.redisService.del(`jobs:feed:${userId}*`);
     await this.redisService.del(`jobs:my:${userId}*`);
 
-    return { status: 'success', data: true };
+    return { success: true };
   }
 
   async findAll(userId: string, pagingInfo: PaginationRequestDto) {
@@ -132,15 +132,15 @@ export class JobsService {
     const job = await this.prismaService.service.findUnique({
       where: { id: jobId },
     });
-    if (!job) throw new Error(`Job with ID ${jobId} not found`);
+    if (!job) throw new NotFoundException(`Job with ID ${jobId} not found`);
 
     if (job.visibility === JobVisibility.FRIENDS) {
       const isFriend = await this.prismaService.follow.findFirst({
         where: { follower_id: userId, followee_id: job.user_id },
       });
-      if (!isFriend) throw new Error('You do not have permission');
+      if (!isFriend) throw new ForbiddenException('You do not have permission');
     } else if (job.visibility === JobVisibility.HIDDEN && job.user_id !== userId) {
-      throw new Error('You do not have permission');
+      throw new ForbiddenException('You do not have permission');
     }
 
     await this.redisService.set(cacheKey, job, 300);
