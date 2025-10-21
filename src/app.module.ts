@@ -8,6 +8,7 @@ import { TransferModule } from './modules/transfer/transfer.module';
 import { JobsModule } from './modules/jobs/jobs.module';
 import { OffersModule } from './modules/offers/offers.module';
 import { RegionModule } from './modules/region/region.module';
+import { BookingsModule } from './modules/bookings/bookings.module';
 
 @Module({
   imports: [
@@ -19,6 +20,7 @@ import { RegionModule } from './modules/region/region.module';
     JobsModule,
     OffersModule,
     RegionModule,
+    BookingsModule
   ],
   controllers: [],
   providers: [],
