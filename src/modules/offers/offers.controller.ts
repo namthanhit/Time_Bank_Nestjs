@@ -41,7 +41,7 @@ export class OffersController {
     @Param("jobId") jobId: string,
     @Body() status: UpdateOfferDto,
   ) {
-    return this.offersService.updateOfferForMyJob(
+    return this.offersService.acceptOfferForMyJob(
       userId,
       offerId,
       jobId,
