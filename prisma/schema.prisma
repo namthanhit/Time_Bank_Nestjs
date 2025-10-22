@@ -118,7 +118,7 @@ model User {
   phone              String      @unique @db.VarChar(32)
   email              String?     @unique @db.VarChar(320)
   avatar_url         String?     @db.VarChar(255) 
-  qr_code            String?     @db.VarChar(255)
+  qr_code            String?     @db.VarChar(2048)
   status             UserStatus  @default(draft)
   created_at         DateTime    @default(now())
   updated_at         DateTime    @default(now()) @updatedAt

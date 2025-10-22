@@ -11,10 +11,12 @@ import { SignupModule } from './modules/signup/signup.module';
 import { PhoneTokenModule } from './common/crypto/phone-token.module';
 import { SkillsModule } from './modules/skill/skills.module';
 import { AuthModule } from './modules/auth/auth.module';
+import { FirebaseModule } from './infra/firebase/firebase.module';
 
 @Module({
   imports: [
     PrismaModule, 
+    FirebaseModule,
     UsersModule,
     WalletModule,
     LedgerModule,

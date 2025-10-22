@@ -33,13 +33,13 @@ export class AuthService {
 
   private signAccessToken(user: { id: string; phone: string }) {
     const payload = { sub: user.id, phone: user.phone };
-    const token = jwt.sign(payload, JWT_SECRET, { expiresIn: ACCESS_TTL });
+    const token = jwt.sign(payload, JWT_SECRET, { expiresIn: ACCESS_TTL }as jwt.SignOptions);
     return token;
   }
 
   private signRefreshToken(user: { id: string; phone: string }) {
     const payload = { sub: user.id, phone: user.phone, typ: 'refresh' };
-    const token = jwt.sign(payload, JWT_SECRET, { expiresIn: REFRESH_TTL });
+    const token = jwt.sign(payload, JWT_SECRET, { expiresIn: REFRESH_TTL }as jwt.SignOptions);
     return token;
   }
 
