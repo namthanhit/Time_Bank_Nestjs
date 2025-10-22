@@ -12,6 +12,7 @@ import { PhoneTokenModule } from './common/crypto/phone-token.module';
 import { SkillsModule } from './modules/skill/skills.module';
 import { AuthModule } from './modules/auth/auth.module';
 import { FirebaseModule } from './infra/firebase/firebase.module';
+import { BookingsModule } from './modules/bookings/bookings.module';
 
 @Module({
   imports: [
@@ -28,6 +29,7 @@ import { FirebaseModule } from './infra/firebase/firebase.module';
     PhoneTokenModule,
     SkillsModule,
     AuthModule,
+    BookingsModule
   ],
   controllers: [],
   providers: [],

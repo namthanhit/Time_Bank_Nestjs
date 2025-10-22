@@ -1,9 +1,10 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from 'src/infra/prisma/prisma.service';
 import { RedisService } from 'src/infra/redis/redis.service';
 import { JobsService } from '../jobs/jobs.service';
 import { OfferDto, UpdateOfferDto } from './typings/offers.dto';
-import { OfferStatus, Prisma } from '@prisma/client';
+import { BookingStatus, OfferStatus, Prisma } from '@prisma/client';
+import { BookingsService } from '../bookings/bookings.service';
 
 @Injectable()
 export class OffersService {
@@ -11,6 +12,7 @@ export class OffersService {
     private readonly prismaService: PrismaService,
     private readonly redisService: RedisService,
     private readonly jobsService: JobsService,
+    private readonly bookingService: BookingsService
   ) {}
 
   async createOffer(userId: string, dto: OfferDto) {
@@ -94,8 +96,7 @@ export class OffersService {
     }));
   }
 
-
-  async updateOfferForMyJob(userId: string, offerId: string, jobId: string, dto: UpdateOfferDto){
+  private async validateOffer(userId: string, offerId: string, jobId: string){
     const offerForMyJob = await this.prismaService.offer.findFirst({
       where: {
         id: offerId,
@@ -105,26 +106,76 @@ export class OffersService {
         },
       },
     });
-
     if(!offerForMyJob) throw new NotFoundException("Offer not found or you do not have permission to update this job")
-    
-    let offerStatus
-    if(dto.status === OfferStatus.accepted){
-      offerStatus = OfferStatus.accepted
-    }else if (dto.status === OfferStatus.rejected){
-      offerStatus = OfferStatus.rejected
-    }else{
-      offerStatus = OfferStatus.cancelled
-    }
 
-    await this.prismaService.offer.update({
+    const service = await this.prismaService.service.findUnique({
       where:{
-        id: offerForMyJob.id,
-      },
-      data:{
-        status: offerStatus
+        id: offerForMyJob.service_id
       }
     })
+    if(!service) throw new NotFoundException("Not found service")
+
+    return { offerForMyJob, service }
+  }
+
+  async acceptOfferForMyJob(userId: string, offerId: string, jobId: string, dto: UpdateOfferDto){
+    const { offerForMyJob, service } = await this.validateOffer(userId, offerId, jobId)
+
+    // chấp nhận yêu cầu offer vào job
+    if(dto.status === OfferStatus.accepted){
+      await this.prismaService.$transaction(async (tx) => {
+        await tx.offer.update({
+          where:{
+            id: offerForMyJob.id,
+          },
+          data:{
+            status: OfferStatus.accepted
+          }
+        })
+        await this.bookingService.createBooking(service.id, offerForMyJob.id, tx)
+      });
+    } else if (dto.status === OfferStatus.cancelled){
+      await this.prismaService.$transaction(async (tx) => {
+        await tx.offer.update({
+          where:{
+            id: offerForMyJob.id,
+          },
+          data:{
+            status: OfferStatus.cancelled
+          }
+        })
+        await this.bookingService.cancelBooking(service.id, offerForMyJob.id, tx)
+      });
+    }
+
+    return {
+      success: true
+    };
+  }
+
+  async rejectOfferForMyJob(userId: string, offerId: string, jobId: string, dto: UpdateOfferDto){
+    const { offerForMyJob } = await this.validateOffer(userId, offerId, jobId)
+
+    if(dto.status === OfferStatus.rejected){
+      await this.prismaService.offer.update({
+        where:{
+          id: offerForMyJob.id,
+        },
+        data:{
+          status: OfferStatus.rejected
+        }
+      })
+    } else if (dto.status === OfferStatus.accepted){
+      await this.prismaService.offer.update({
+        where:{
+          id: offerForMyJob.id,
+        },
+        data:{
+          status: OfferStatus.accepted
+        }
+      })
+    }
+
     return {
       success: true
     };
@@ -138,6 +189,21 @@ export class OffersService {
       }
     })
     if (!offer) throw new NotFoundException("Not found offer of you")
+
+    if (offer.status === OfferStatus.pending){
+      await this.prismaService.offer.update({
+        where:{
+          id: offer.id,
+        },
+        data:{
+          status: OfferStatus.cancelled
+        }
+      })
+
+      return {
+        success: true
+      };
+    }
 
     await this.prismaService.offer.update({
       where:{

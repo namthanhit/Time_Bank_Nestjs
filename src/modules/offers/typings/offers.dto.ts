@@ -1,3 +1,4 @@
+import { OfferStatus } from "@prisma/client";
 import { IsNotEmpty, IsOptional, IsString } from "class-validator";
 
 export class OfferDto {
@@ -13,5 +14,5 @@ export class OfferDto {
 export class UpdateOfferDto{
     @IsString()
     @IsNotEmpty()
-    status: string;
+    status: OfferStatus;
 }
