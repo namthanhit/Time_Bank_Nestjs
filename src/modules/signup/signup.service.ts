@@ -22,6 +22,17 @@ export class AuthService {
     return { exists: false as const, phone_token };
   }
 
+  async checkUnique(email?: string, citizenId?: string) {
+    const [emailDup, cccdDup] = await Promise.all([
+      email ? this.prisma.user.findUnique({ where: { email } }) : null,
+      citizenId ? this.prisma.user.findUnique({ where: { citizen_id: citizenId } }) : null,
+    ]);
+    return {
+      email_taken: !!emailDup,
+      citizen_id_taken: !!cccdDup,
+    };
+  }
+
   async createFromPhoneToken(dto: CreateFromPhoneTokenDto) {
     // 1) verify phone token
     let phone = '';
@@ -83,7 +94,7 @@ export class AuthService {
             user_id: user.id,
             birth_date: birthDate,
             gender,
-            address: dto.personal.address ?? null,
+            region_id: dto.personal.region_id ?? null,
             description: dto.personal.specialization_or_description ?? null,
           },
         });

@@ -13,6 +13,14 @@ export class AuthController {
     return this.service.checkPhoneRaw(q.phone); // KHÔNG chuẩn hoá
   }
 
+  @Get('check-unique')
+  checkUnique(
+    @Query('email') email?: string,
+    @Query('citizen_id') citizenId?: string,
+  ) {
+    return this.service.checkUnique(email, citizenId);
+  }
+
   @Post('signup/create')
   async create(@Body() dto: CreateFromPhoneTokenDto) {
     return this.service.createFromPhoneToken(dto);

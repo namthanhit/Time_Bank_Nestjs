@@ -22,7 +22,7 @@ export class SignupPersonalDto {
   gender?: Gender;
 
   @IsOptional() @IsString() @MaxLength(255)
-  address?: string;
+  region_id?: string;
 
   @IsOptional() @IsString() @MaxLength(512)
   specialization_or_description?: string; // map vào UserDetail.description
