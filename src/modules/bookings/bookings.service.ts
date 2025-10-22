@@ -1,5 +1,6 @@
 import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
 import { BookingStatus, OfferStatus } from '@prisma/client';
+import { PrismaClient } from '@prisma/client/extension';
 import { PrismaService } from 'src/infra/prisma/prisma.service';
 
 @Injectable()
@@ -27,14 +28,14 @@ export class BookingsService {
     return { service, offer }
   }
 
-  async createBooking(service_id: string, offer_id: string){
+  async createBooking(service_id: string, offer_id: string, tx: PrismaClient){
     const { service, offer } = await this.validateDtoBooking(service_id, offer_id)
 
     if (service.preferred_start == null) {
       throw new BadRequestException('Service preferred_start is required');
     }
 
-    await this.prismaService.booking.create({
+    await tx.booking.create({
       data:{
         service_id: service.id,
         offer_id: offer.id,
@@ -51,10 +52,10 @@ export class BookingsService {
     }
   }
 
-  async cancellBooking(service_id: string, offer_id: string){
+  async cancelBooking(service_id: string, offer_id: string, tx: PrismaClient){
     const { service, offer } = await this.validateDtoBooking(service_id, offer_id)
 
-    const result = await this.prismaService.booking.updateMany({
+    const result = await tx.booking.updateMany({
       where: {
         service_id: service.id,
         offer_id: offer.id

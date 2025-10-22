@@ -117,13 +117,14 @@ export class OffersService {
 
     return { offerForMyJob, service }
   }
+
   async acceptOfferForMyJob(userId: string, offerId: string, jobId: string, dto: UpdateOfferDto){
     const { offerForMyJob, service } = await this.validateOffer(userId, offerId, jobId)
 
     // chấp nhận yêu cầu offer vào job
     if(dto.status === OfferStatus.accepted){
       await this.prismaService.$transaction(async (tx) => {
-        tx.offer.update({
+        await tx.offer.update({
           where:{
             id: offerForMyJob.id,
           },
@@ -131,11 +132,11 @@ export class OffersService {
             status: OfferStatus.accepted
           }
         })
-        await this.bookingService.createBooking(service.id, offerForMyJob.id)
+        await this.bookingService.createBooking(service.id, offerForMyJob.id, tx)
       });
     } else if (dto.status === OfferStatus.cancelled){
       await this.prismaService.$transaction(async (tx) => {
-        tx.offer.update({
+        await tx.offer.update({
           where:{
             id: offerForMyJob.id,
           },
@@ -143,7 +144,7 @@ export class OffersService {
             status: OfferStatus.cancelled
           }
         })
-        await this.bookingService.cancellBooking(service.id, offerForMyJob.id)
+        await this.bookingService.cancelBooking(service.id, offerForMyJob.id, tx)
       });
     }
 
@@ -188,6 +189,21 @@ export class OffersService {
       }
     })
     if (!offer) throw new NotFoundException("Not found offer of you")
+
+    if (offer.status === OfferStatus.pending){
+      await this.prismaService.offer.update({
+        where:{
+          id: offer.id,
+        },
+        data:{
+          status: OfferStatus.cancelled
+        }
+      })
+
+      return {
+        success: true
+      };
+    }
 
     await this.prismaService.offer.update({
       where:{

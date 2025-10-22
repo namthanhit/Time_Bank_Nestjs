@@ -34,14 +34,29 @@ export class OffersController {
   }
 
   //update offer (chấp nhận, từ chối)
-  @Patch('/:offerId/me-job/:jobId/update-offer')
-  async updateOffer(
+  @Patch('/:offerId/me-job/:jobId/accept-offer')
+  async acceptOffer(
     @UserId() userId: string,
     @Param("offerId") offerId: string,
     @Param("jobId") jobId: string,
     @Body() status: UpdateOfferDto,
   ) {
     return this.offersService.acceptOfferForMyJob(
+      userId,
+      offerId,
+      jobId,
+      status
+    );
+  }
+  
+  @Patch('/:offerId/me-job/:jobId/reject-offer')
+  async rejectOffer(
+    @UserId() userId: string,
+    @Param("offerId") offerId: string,
+    @Param("jobId") jobId: string,
+    @Body() status: UpdateOfferDto,
+  ) {
+    return this.offersService.rejectOfferForMyJob(
       userId,
       offerId,
       jobId,
