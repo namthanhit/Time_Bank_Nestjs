@@ -1,36 +1,23 @@
-import { Controller, Get, Post, Body, Patch, Param, Delete } from '@nestjs/common';
+import { Controller, Get, Patch, Body, UseGuards } from '@nestjs/common';
 import { UsersService } from './users.service';
-import { CreateUserDto } from './typings/create-user.dto';
 import { UpdateUserDto } from './typings/user.update.dto';
+import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
+import { UserId } from '../../common/decorators/user-id.decorator';
 
 @Controller('users')
+@UseGuards(JwtAuthGuard) // bảo vệ toàn bộ controller
 export class UsersController {
-  constructor(
-    private readonly usersService: UsersService
-  ) {}
+  constructor(private readonly usersService: UsersService) {}
 
-  // @Post()
-  // create(@Body() createUserDto: CreateUserDto) {
-  //   return this.usersService.create(createUserDto);
-  // }
-
-  @Get()
-  findAll() {
-    return this.usersService.findAll();
+  // Chỉ lấy hồ sơ của chính mình
+  @Get('me')
+  async getMe(@UserId() userId: string) {
+    return this.usersService.getUserDetailById(userId);
   }
 
-  @Get(':id')
-  async findOne(
-    @Param('id') id: string
-  ) {
-    return this.usersService.getUserDetailById(id);
-  }
-
-  @Patch('/me/edit-profile/:id')
-  update(
-    @Param('id') id: string, 
-    @Body() updateUserDto: UpdateUserDto
-  ) {
-    return this.usersService.updateUserById(id, updateUserDto);
+  // Cập nhật hồ sơ của chính mình
+  @Patch('me')
+  async updateMe(@UserId() userId: string, @Body() dto: UpdateUserDto) {
+    return this.usersService.updateUserById(userId, dto);
   }
 }
