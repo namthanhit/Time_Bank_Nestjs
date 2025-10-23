@@ -7,9 +7,7 @@ export class FirebaseService {
   private _app: admin.app.App;
 
   constructor() {
-    if (admin.apps.length === 0) {
-      // Cách 1: dùng biến môi trường (không cần file JSON)
-      // Lưu ý: PRIVATE_KEY phải replace \n -> newline
+    if (!admin.apps.length) {
       const privateKey = (process.env.FIREBASE_PRIVATE_KEY || '').replace(/\\n/g, '\n');
 
       this._app = admin.initializeApp({
@@ -26,11 +24,37 @@ export class FirebaseService {
     }
   }
 
+  // ====== Core getters ======
+  get app() {
+    return this._app;
+  }
+
+  get auth(): admin.auth.Auth {
+    return this._app.auth();
+  }
+
   get storage() {
     return this._app.storage();
   }
 
   get bucket() {
-    return this._app.storage().bucket(); // mặc định từ storageBucket ở trên
+    return this._app.storage().bucket();
+  }
+
+  // ====== Auth helpers ======
+
+  /** Phát hành Firebase Custom Token để client signInWithCustomToken(...) */
+  async issueCustomToken(uid: string, claims?: Record<string, any>): Promise<string> {
+    return this.auth.createCustomToken(uid, claims || {});
+  }
+
+  /** Xác minh ID token (nếu cần), checkRevoked = true để từ chối token đã revoke */
+  async verifyIdToken(idToken: string, checkRevoked = false) {
+    return this.auth.verifyIdToken(idToken, checkRevoked);
+  }
+
+  /** Revoke tất cả refresh tokens của user trên Firebase (đăng xuất trên tất cả thiết bị) */
+  async revokeUserTokens(uid: string): Promise<void> {
+    await this.auth.revokeRefreshTokens(uid);
   }
 }
