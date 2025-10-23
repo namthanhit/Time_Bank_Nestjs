@@ -42,7 +42,7 @@ export class OffersService {
           select: {
             id: true,
             full_name: true,
-            avatar_id: true
+            avatar_url: true
           },
         },
       },
@@ -90,7 +90,7 @@ export class OffersService {
         user: {
           id: offer.service.user.id,
           full_name: offer.service.user.full_name,
-          avata: offer.service.user.avatar_id
+          avata: offer.service.user.avatar_url
         },
       },
     }));

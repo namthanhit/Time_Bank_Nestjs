@@ -4,4 +4,4 @@ services:
     container_name: timebank-redis
     ports:
       - "6379:6379"
-    command: ["redis-server", "--appendonly", "yes"]
+    command: ["redis-server", "--appendonly", "yes", "--requirepass", "08012004"]

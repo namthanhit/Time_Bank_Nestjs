@@ -117,8 +117,8 @@ model User {
   citizen_id         String?     @unique @db.VarChar(64)
   phone              String      @unique @db.VarChar(32)
   email              String?     @unique @db.VarChar(320)
-  avatar_id          String      @unique
-  qr_code            String?     @db.VarChar(255)
+  avatar_url         String?     @db.VarChar(255) 
+  qr_code            String?     @db.VarChar(2048)
   status             UserStatus  @default(draft)
   created_at         DateTime    @default(now())
   updated_at         DateTime    @default(now()) @updatedAt
@@ -129,7 +129,7 @@ model User {
   verification_codes VerificationCode[]
   signup_sessions    SignupSession[]
   refresh_tokens     RefreshToken[]
-  avatar             Image       @relation("UserAvatar", fields: [avatar_id], references: [id], onDelete: Cascade)
+ 
 
   following Follow[] @relation("UserFollows")
   followers Follow[] @relation("UserFollowed")
@@ -442,7 +442,5 @@ model Image {
   alt_text    String?  @db.VarChar(255)
   created_at  DateTime @default(now())
   updated_at  DateTime @default(now()) @updatedAt
-
-  user_as_avatar User? @relation("UserAvatar")
   serviceImages ServiceImage[]
 }
