@@ -5,17 +5,23 @@ import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { UserId } from '../../common/decorators/user-id.decorator';
 
 @Controller('users')
-@UseGuards(JwtAuthGuard) // bảo vệ toàn bộ controller
 export class UsersController {
   constructor(private readonly usersService: UsersService) {}
+  // Lấy danh sách tất cả người dùng (chỉ dành cho admin)
+  @Get()
+  findAll() {
+    return this.usersService.findAll();
+  }
 
   // Chỉ lấy hồ sơ của chính mình
+  @UseGuards(JwtAuthGuard)
   @Get('me')
   async getMe(@UserId() userId: string) {
     return this.usersService.getUserDetailById(userId);
   }
 
   // Cập nhật hồ sơ của chính mình
+  @UseGuards(JwtAuthGuard)
   @Patch('me')
   async updateMe(@UserId() userId: string, @Body() dto: UpdateUserDto) {
     return this.usersService.updateUserById(userId, dto);
