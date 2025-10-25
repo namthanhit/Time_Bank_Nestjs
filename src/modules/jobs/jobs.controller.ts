@@ -1,10 +1,12 @@
-import { Controller, Get, Post, Body, Param, Delete, Put, Query } from '@nestjs/common';
+import { Controller, Get, Post, Body, Param, Delete, Put, Query, Patch, UseGuards } from '@nestjs/common';
 import { JobsService } from './jobs.service';
 import { CreateJobDto } from './typings/job.dto';
 import { UserId } from 'src/common/decorators/user-id.decorator';
 import { PaginationRequestDto, PaginationTransformPipe } from 'src/typings/dtos/pagination.dto';
+import { JwtAuthGuard } from 'src/common/guards/jwt-auth.guard';
 
 @Controller('jobs')
+@UseGuards(JwtAuthGuard)
 export class JobsController {
   constructor(private readonly jobsService: JobsService) {}
 

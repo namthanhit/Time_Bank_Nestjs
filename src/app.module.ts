@@ -13,11 +13,15 @@ import { SkillsModule } from './modules/skill/skills.module';
 import { AuthModule } from './modules/auth/auth.module';
 import { FirebaseModule } from './infra/firebase/firebase.module';
 import { BookingsModule } from './modules/bookings/bookings.module';
+import { QueueModule } from './infra/queue/queue.module';
+import { EscrowsModule } from './modules/escrows/escrows.module';
 
 @Module({
   imports: [
     PrismaModule, 
     FirebaseModule,
+    PrismaModule,
+    QueueModule,
     UsersModule,
     WalletModule,
     LedgerModule,
@@ -29,7 +33,8 @@ import { BookingsModule } from './modules/bookings/bookings.module';
     PhoneTokenModule,
     SkillsModule,
     AuthModule,
-    BookingsModule
+    BookingsModule,
+    EscrowsModule,
   ],
   controllers: [],
   providers: [],

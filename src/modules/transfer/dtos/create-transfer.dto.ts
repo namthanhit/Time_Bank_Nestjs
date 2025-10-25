@@ -20,3 +20,20 @@ export class CreateTransferDto {
     @Matches(/^\d{6}$/)
     pin!: string;
 }
+
+export class TransferToEscrowDto {
+    @IsString()
+    @IsNotEmpty()
+    jobId: string;
+
+    @IsNotEmpty()
+    @IsInt()
+    @Min(1)
+    secs: number;
+
+    @IsString()
+    @IsNotEmpty()
+    @Length(6, 6)
+    @Matches(/^\d{6}$/)
+    pin: string;
+}
