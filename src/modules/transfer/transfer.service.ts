@@ -3,7 +3,7 @@ import { PrismaService } from '../../infra/prisma/prisma.service';
 import { CheckDto } from './dtos/check.dto';
 import { CreateTransferDto } from './dtos/create-transfer.dto';
 import { UserStatus, LedgerDirection, LedgerRefType, TransferStatus, WalletStatus } from '@prisma/client';
-import * as argon2 from 'argon2';
+import * as bcrypt from 'bcrypt';
 
 const PIN_MAX_FAILS = 5;
 const PIN_LOCK_MINUTES = 5;
@@ -70,7 +70,7 @@ export class TransferService {
     if (auth.pin_locked_until && auth.pin_locked_until > now) {
       throw new ForbiddenException('PIN đang bị khóa tạm thời, thử lại sau');
     }
-    const okPin = await argon2.verify(auth.pin, dto.pin);
+    const okPin = await bcrypt.compare(dto.pin, auth.pin);
     if (!okPin) {
       const failed = (auth.pin_failed_attempts ?? 0) + 1;
       const lock = failed >= PIN_MAX_FAILS ? new Date(now.getTime() + PIN_LOCK_MINUTES * 60 * 1000) : null;

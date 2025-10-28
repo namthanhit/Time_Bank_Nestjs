@@ -9,18 +9,6 @@ export class UsersService {
     private readonly prisma: PrismaService,
   ) {}
 
-  // //để tạm thời để fake user
-  // async create(data: CreateUserDto) {
-  //   return this.prisma.user.create({
-  //     data: {
-  //       full_name: data.full_name,
-  //       citizen_id: data.citizen_id,
-  //       phone: data.phone,
-  //       email: data.email,
-  //       qr_code: data.qr_code ?? `QR-${Date.now()}`
-  //     },
-  //   });
-  // }
 
   async findAll() {
     return this.prisma.user.findMany();
