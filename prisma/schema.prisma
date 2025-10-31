@@ -13,6 +13,12 @@ enum WalletStatus {
   closed
 }
 
+enum EscrowWalletStatus {
+  released
+  pending
+  refunded
+}
+
 enum TransferStatus {
   pending
   completed
@@ -38,6 +44,7 @@ enum Visibility {
 }
 
 enum ServiceStatus {
+  pending
   open
   matched
   completed
@@ -57,6 +64,7 @@ enum BookingStatus {
   scheduled
   ongoing
   completed
+  ended
   cancelled
 }
 
@@ -274,20 +282,39 @@ model Wallet {
   ledgerEntries LedgerEntry[]
 }
 
-model Transfer {
-  id             String         @id @default(cuid())
-  from_wallet_id String
-  to_wallet_id   String
-  secs           Int
-  status         TransferStatus @default(pending)
-  note           String?        @db.VarChar(200)
-  created_at     DateTime       @default(now())
-  completed_at   DateTime?
-  cancelled_at   DateTime?
-  failed_at      DateTime?
+model EscrowWallet {
+  id             String       @id @default(cuid())
+  job_id         String       @unique
+  secs           Int          @default(0)
+  status         EscrowWalletStatus @default(pending)
+  
+  created_at     DateTime     @default(now())
+  updated_at     DateTime     @default(now()) @updatedAt
 
-  fromWallet Wallet @relation("FromWallet", fields: [from_wallet_id], references: [id], onDelete: Cascade)
-  toWallet   Wallet @relation("ToWallet", fields: [to_wallet_id], references: [id], onDelete: Cascade)
+  service        Service       @relation(fields: [job_id], references: [id], onDelete: Cascade)
+  transfersTo    Transfer[]    @relation("ToEscrow")
+  transfersFrom  Transfer[]    @relation("FromEscrow")
+}
+
+model Transfer {
+  id               String         @id @default(cuid())
+  from_wallet_id   String?
+  to_wallet_id     String?
+  from_escrow_id   String?
+  to_escrow_id     String?
+  secs             Int
+  status           TransferStatus @default(pending)
+  note             String?        @db.VarChar(200)
+  created_at       DateTime       @default(now())
+  completed_at     DateTime?
+  cancelled_at     DateTime?
+  failed_at        DateTime?
+
+  fromWallet Wallet?        @relation("FromWallet", fields: [from_wallet_id], references: [id], onDelete: SetNull)
+  toWallet   Wallet?        @relation("ToWallet", fields: [to_wallet_id], references: [id], onDelete: SetNull)
+
+  fromEscrow EscrowWallet?  @relation("FromEscrow", fields: [from_escrow_id], references: [id], onDelete: SetNull)
+  toEscrow   EscrowWallet?  @relation("ToEscrow", fields: [to_escrow_id], references: [id], onDelete: SetNull)
 }
 
 model LedgerEntry {
@@ -346,6 +373,7 @@ model Service {
   user User @relation(fields: [user_id], references: [id], onDelete: Cascade)
   serviceImages ServiceImage[]
   serviceSkills ServiceSkill[]
+  escrowWallet   EscrowWallet?
   offers  Offer[]
   bookings Booking[]
   favorites Favorite[]
@@ -399,6 +427,7 @@ model Booking {
   place          String?       @db.VarChar(160)
   status         BookingStatus @default(scheduled)
   created_at     DateTime      @default(now())
+  check_in_time  DateTime?
   completed_at   DateTime?
   cancelled_at   DateTime?
 

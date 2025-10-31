@@ -1,9 +1,11 @@
-import { Controller, Get, Post, Body, Patch, Param, Delete } from '@nestjs/common';
+import { Controller, Get, Post, Body, Patch, Param, Delete, UseGuards } from '@nestjs/common';
 import { OffersService } from './offers.service';
 import { UserId } from 'src/common/decorators/user-id.decorator';
 import { OfferDto, UpdateOfferDto } from './typings/offers.dto';
+import { JwtAuthGuard } from 'src/common/guards/jwt-auth.guard';
 
 @Controller('offers')
+@UseGuards(JwtAuthGuard)
 export class OffersController {
   constructor(
     private readonly offersService: OffersService

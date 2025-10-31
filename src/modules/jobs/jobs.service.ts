@@ -1,4 +1,8 @@
-import { ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
+import {
+  ForbiddenException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 import { CreateJobDto } from './typings/job.dto';
 import { PrismaService } from 'src/infra/prisma/prisma.service';
 import { JobStatus, JobVisibility } from './typings/job.enum';
@@ -6,12 +10,17 @@ import { PaginationRequestDto } from 'src/typings/dtos/pagination.dto';
 import { getQueryParams } from 'src/utils/get-query-params';
 import { Prisma, Visibility } from '@prisma/client';
 import { RedisService } from 'src/infra/redis/redis.service';
+import { QueueService } from 'src/infra/queue/queue.service';
+import { EscrowsService } from '../escrows/escrows.service';
+import { TWENTY_FOUR_HOURS_MS } from 'src/common/constants';
 
 @Injectable()
 export class JobsService {
   constructor(
     private readonly prismaService: PrismaService,
     private readonly redisService: RedisService,
+    private readonly escrowsService: EscrowsService,
+    private readonly queueService: QueueService,
   ) {}
 
   private async validateDto(createJobDto: CreateJobDto) {
@@ -24,7 +33,9 @@ export class JobsService {
       (id) => !validatedSkillIds.includes(id),
     );
     if (invalidSkillIds.length > 0)
-      throw new NotFoundException(`Invalid skill IDs: ${invalidSkillIds.join(', ')}`);
+      throw new NotFoundException(
+        `Invalid skill IDs: ${invalidSkillIds.join(', ')}`,
+      );
 
     const preferred_start_time = new Date(createJobDto.preferred_start_time);
     if (preferred_start_time < new Date())
@@ -34,9 +45,10 @@ export class JobsService {
   }
 
   async createJob(userId: string, createJobDto: CreateJobDto) {
-    const { validatedSkillIds, preferred_start_time } = await this.validateDto(createJobDto);
+    const { validatedSkillIds, preferred_start_time } =
+      await this.validateDto(createJobDto);
 
-    await this.prismaService.$transaction(async (tx) => {
+    const job = await this.prismaService.$transaction(async (tx) => {
       const job = await tx.service.create({
         data: {
           user_id: userId,
@@ -44,7 +56,7 @@ export class JobsService {
           description: createJobDto.description,
           region_code: createJobDto.region_code,
           place: createJobDto.place,
-          status: JobStatus.OPEN,
+          status: JobStatus.PENDING,
           preferred_start: preferred_start_time,
           time: createJobDto.time,
           slot: createJobDto.slot,
@@ -52,17 +64,26 @@ export class JobsService {
         },
       });
 
-      await tx.serviceSkill.createMany({
+      const skill = await tx.serviceSkill.createMany({
         data: validatedSkillIds.map((id) => ({
           service_id: job.id,
           skill_id: id,
         })),
       });
+
+      await this.escrowsService.createEscrow(userId, job.id, tx);
+      return job;
     });
+
+    await this.queueService.scheduleJob(
+      'delete-pending-job',
+      { jobId: job.id },
+      TWENTY_FOUR_HOURS_MS,
+      `delete-pending-job-${job.id}`,
+    );
 
     await this.redisService.del(`jobs:feed:${userId}*`);
     await this.redisService.del(`jobs:my:${userId}*`);
-
     return { success: true };
   }
 
@@ -139,7 +160,10 @@ export class JobsService {
         where: { follower_id: userId, followee_id: job.user_id },
       });
       if (!isFriend) throw new ForbiddenException('You do not have permission');
-    } else if (job.visibility === JobVisibility.HIDDEN && job.user_id !== userId) {
+    } else if (
+      job.visibility === JobVisibility.HIDDEN &&
+      job.user_id !== userId
+    ) {
       throw new ForbiddenException('You do not have permission');
     }
 
@@ -156,7 +180,8 @@ export class JobsService {
 
     const where: Prisma.ServiceWhereInput = { user_id: userId };
 
-    if (pagingInfo.type?.length) where.status = { in: pagingInfo.type as JobStatus[] };
+    if (pagingInfo.type?.length)
+      where.status = { in: pagingInfo.type as JobStatus[] };
 
     if (pagingInfo.search) {
       const keyword = pagingInfo.search.trim();
@@ -206,7 +231,8 @@ export class JobsService {
   }
 
   async updateMyJob(userId: string, jobId: string, updateJobDto: CreateJobDto) {
-    const { validatedSkillIds, preferred_start_time } = await this.validateDto(updateJobDto);
+    const { validatedSkillIds, preferred_start_time } =
+      await this.validateDto(updateJobDto);
     const job = await this.prismaService.service.findUnique({
       where: { id: jobId, user_id: userId },
     });
@@ -263,5 +289,18 @@ export class JobsService {
     await this.redisService.del(`jobs:feed:${userId}*`);
 
     return { data: true };
+  }
+
+  async changeJobStatus(jobId: string, status: JobStatus) {
+    const job = await this.prismaService.service.findUnique({
+      where: { id: jobId },
+    });
+
+    if (!job) throw new NotFoundException(`Job with ID ${jobId} not found`);
+
+    return await this.prismaService.service.update({
+      where: { id: jobId },
+      data: { status },
+    });
   }
 }

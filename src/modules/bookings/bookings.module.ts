@@ -6,5 +6,6 @@ import { PrismaService } from 'src/infra/prisma/prisma.service';
 @Module({
   controllers: [BookingsController],
   providers: [BookingsService, PrismaService],
+  exports: [BookingsService],
 })
 export class BookingsModule {}

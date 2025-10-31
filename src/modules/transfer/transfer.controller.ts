@@ -2,7 +2,7 @@ import { Controller, Get, Post, Query, Body } from '@nestjs/common';
 import { TransferService } from './transfer.service';
 import { LookupDto } from './dtos/lookup.dto';
 import { CheckDto } from './dtos/check.dto';
-import { CreateTransferDto } from './dtos/create-transfer.dto';
+import { CreateTransferDto, TransferToEscrowDto } from './dtos/create-transfer.dto';
 import { UserId } from '../../common/decorators/user-id.decorator';
 import { UseGuards } from '@nestjs/common';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
@@ -27,5 +27,14 @@ export class TransferController {
   @Post()
   create(@Body() dto: CreateTransferDto, @UserId() userId: string) {
     return this.service.executeNoRecheck(userId, dto);
+  }
+
+  @UseGuards(JwtAuthGuard)
+  @Post('/to-escrow')
+  async transferToEscrow(
+    @UserId() userId: string,
+    @Body() dto: TransferToEscrowDto,
+  ) {
+    return this.service.transferToEscrow(userId, dto);
   }
 }
