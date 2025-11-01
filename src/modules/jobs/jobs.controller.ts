@@ -19,11 +19,11 @@ export class JobsController {
   }
 
   @Get()
-  async findAll(
+  async findJobCommunity(
     @UserId() userId: string,
     @Query(new PaginationTransformPipe()) pagingInfo: PaginationRequestDto
   ) {
-    return this.jobsService.findAll(userId, pagingInfo);
+    return this.jobsService.findJobCommunity(userId, pagingInfo);
   }
 
   @Get(':id')

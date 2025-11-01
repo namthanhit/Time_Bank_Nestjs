@@ -87,7 +87,7 @@ export class JobsService {
     return { success: true };
   }
 
-  async findAll(userId: string, pagingInfo: PaginationRequestDto) {
+  async findJobCommunity(userId: string, pagingInfo: PaginationRequestDto) {
     const { queryParams, metadata } = getQueryParams(pagingInfo);
     const cacheKey = `jobs:feed:${userId}:page:${metadata.page}:search:${pagingInfo.search || ''}`;
 
@@ -127,12 +127,35 @@ export class JobsService {
         skip: queryParams.paging.skip,
         take: queryParams.paging.take,
         orderBy: queryParams.orderBy,
+        include: {
+          user: {
+            select: {
+              id: true,
+              full_name: true,
+              avatar_url: true,
+            },
+          },
+          serviceSkills: {
+            include: {
+              skill: {
+                select: {
+                  id: true,
+                  name: true,
+                },
+              },
+            },
+          },
+        },
       }),
       this.prismaService.service.count({ where }),
     ]);
 
     const result = {
-      data: items,
+      data: items.map((item) => ({
+        ...item,
+        skills: item.serviceSkills.map((ss) => ss.skill),
+        serviceSkills: undefined,
+      })),
       metadata: {
         total,
         page: metadata.page,
@@ -191,19 +214,41 @@ export class JobsService {
         { place: { contains: keyword } },
       ];
     }
-
     const [items, total] = await Promise.all([
       this.prismaService.service.findMany({
         where,
         skip: queryParams.paging.skip,
         take: queryParams.paging.take,
         orderBy: queryParams.orderBy,
+        include: {
+          user: {
+            select: {
+              id: true,
+              full_name: true,
+              avatar_url: true,
+            },
+          },
+          serviceSkills: {
+            include: {
+              skill: {
+                select: {
+                  id: true,
+                  name: true,
+                },
+              },
+            },
+          },
+        },
       }),
       this.prismaService.service.count({ where }),
     ]);
 
     const result = {
-      data: items,
+      data: items.map((item) => ({
+        ...item,
+        skills: item.serviceSkills.map((ss) => ss.skill),
+        serviceSkills: undefined,
+      })),
       metadata: {
         total,
         page: metadata.page,
