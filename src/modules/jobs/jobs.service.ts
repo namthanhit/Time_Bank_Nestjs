@@ -389,7 +389,7 @@ export class JobsService {
     
     await this.prismaService.service.update({
       where:{
-        id: existingJob.id,
+        id: jobId,
         status: JobStatus.OPEN || JobStatus.MATCHED
       },
       data:{
