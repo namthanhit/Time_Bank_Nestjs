@@ -50,6 +50,7 @@ enum ServiceStatus {
   completed
   cancelled
   expired
+  banned
 }
 
 enum OfferStatus {

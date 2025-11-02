@@ -5,6 +5,7 @@ export enum JobStatus {
     COMPLETED = "completed",
     CANCELLED = "cancelled",
     EXPIRED = "expired",
+    BANNED = "banned"
 }
 
 export enum JobVisibility {

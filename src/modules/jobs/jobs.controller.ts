@@ -66,4 +66,9 @@ export class JobsController {
   ) {
     return this.jobsService.cancelJob(userId, jobId);
   }
+
+  @Delete(':jobId/block-job')
+  async blockJob(@Param('jobId') jobId: string){
+    return this.jobsService.blockJobById(jobId)
+  }
 }
