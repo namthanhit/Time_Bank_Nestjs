@@ -1,14 +1,13 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, NotFoundException } from '@nestjs/common';
 import { CreateUserDto } from './typings/create-user.dto';
 import { UpdateUserDto } from './typings/user.update.dto';
 import { PrismaService } from 'src/infra/prisma/prisma.service';
+import e from 'express';
+import { UserStatus } from '@prisma/client';
 
 @Injectable()
 export class UsersService {
-  constructor(
-    private readonly prisma: PrismaService,
-  ) {}
-
+  constructor(private readonly prisma: PrismaService) {}
 
   async findAll() {
     return this.prisma.user.findMany();
@@ -18,7 +17,7 @@ export class UsersService {
     const user = await this.prisma.user.findUnique({
       where: { id },
     });
-    if (!user) throw new Error("User not found");
+    if (!user) throw new Error('User not found');
     const userDetail = await this.prisma.userDetail.findUnique({
       where: { user_id: id },
     });
@@ -34,20 +33,20 @@ export class UsersService {
       where: { id },
     });
 
-    if (!user) throw new Error("User not found");
+    if (!user) throw new Error('User not found');
 
     const existingEmailUser = await this.prisma.user.findUnique({
       where: { email: dto.email },
     });
     if (existingEmailUser && existingEmailUser.id !== id) {
-      throw new Error("Email already in use");
+      throw new Error('Email already in use');
     }
 
     const existingPhoneUser = await this.prisma.user.findUnique({
       where: { phone: dto.phone },
     });
     if (existingPhoneUser && existingPhoneUser.id !== id) {
-      throw new Error("Phone number already in use");
+      throw new Error('Phone number already in use');
     }
 
     //tạo transaction
@@ -79,5 +78,27 @@ export class UsersService {
       }
     });
     return result;
+  }
+
+  async blockUserById(userId: string) {
+    const existingUser = this.prisma.user.findUnique({
+      where: {
+        id: userId,
+      },
+    });
+
+    if (!existingUser) throw new NotFoundException("Not found user")
+
+    await this.prisma.user.update({
+      where: {
+        id: userId,
+        status: UserStatus.active
+      },
+      data: {
+        status: UserStatus.banned
+      }
+    })
+
+    return { success: true }
   }
 }

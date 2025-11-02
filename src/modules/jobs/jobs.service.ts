@@ -268,6 +268,35 @@ export class JobsService {
 
     const job = await this.prismaService.service.findUnique({
       where: { id: jobId, user_id: userId },
+      include: {
+        user: {
+          select: {
+            id: true,
+            full_name: true,
+            avatar_url: true,
+          },
+        },
+        serviceSkills: {
+          include: {
+            skill: {
+              select: {
+                id: true,
+                name: true,
+              },
+            },
+          },
+        },
+        serviceImages:{
+          include: {
+            image: {
+              select:{
+                id: true,
+                url: true
+              }
+            }
+          }
+        }
+      },
     });
     if (!job) throw new NotFoundException(`Job with ID ${jobId} not found`);
 
@@ -347,5 +376,25 @@ export class JobsService {
       where: { id: jobId },
       data: { status },
     });
+  }
+
+  async blockJobById(jobId: string){
+    const existingJob = this.prismaService.service.findUnique({
+      where:{
+        id: jobId
+      }
+    })
+
+    if (!existingJob) throw new NotFoundException("Not found")
+    
+    await this.prismaService.service.update({
+      where:{
+        id: existingJob.id,
+        status: JobStatus.OPEN || JobStatus.MATCHED
+      },
+      data:{
+        status: JobStatus.BANNED
+      }
+    })
   }
 }
