@@ -15,6 +15,7 @@ import { FirebaseModule } from './infra/firebase/firebase.module';
 import { BookingsModule } from './modules/bookings/bookings.module';
 import { QueueModule } from './infra/queue/queue.module';
 import { EscrowsModule } from './modules/escrows/escrows.module';
+import { RatingsModule } from './modules/ratings/ratings.module';
 
 @Module({
   imports: [
@@ -35,6 +36,7 @@ import { EscrowsModule } from './modules/escrows/escrows.module';
     AuthModule,
     BookingsModule,
     EscrowsModule,
+    RatingsModule,
   ],
   controllers: [],
   providers: [],

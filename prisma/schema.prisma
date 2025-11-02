@@ -451,7 +451,13 @@ model Rating {
   booking Booking @relation(fields: [booking_id], references: [id], onDelete: Cascade)
   rater   User    @relation("RaterRatings", fields: [rater_id], references: [id], onDelete: Cascade)
   ratee   User    @relation("RateeRatings", fields: [ratee_id], references: [id], onDelete: Cascade)
+
+  ratingImages RatingImage[]                  
+
+  @@unique([booking_id, rater_id], name: "booking_id_rater_id")// mỗi rater 1 rating/booking
+  @@index([ratee_id])                         // truy vấn thống kê rating theo người nhận
 }
+
 
 model ServiceImage {
   id         String   @id @default(cuid())
@@ -467,9 +473,25 @@ model ServiceImage {
 
 model Image {
   id          String   @id @default(cuid())
-  url         String   @db.VarChar(255)
+  url         String   @db.VarChar(2048)
   alt_text    String?  @db.VarChar(255)
   created_at  DateTime @default(now())
   updated_at  DateTime @default(now()) @updatedAt
   serviceImages ServiceImage[]
+  ratingImages  RatingImage[]
+}
+
+model RatingImage {
+  id         String   @id @default(cuid())
+  rating_id  String
+  image_id   String
+  position   Int      @default(0)              // để sắp xếp ảnh trong bài đánh giá
+  caption    String?  @db.VarChar(255)         // mô tả ngắn cho ảnh (tuỳ chọn)
+  created_at DateTime @default(now())
+
+  rating Rating @relation(fields: [rating_id], references: [id], onDelete: Cascade)
+  image  Image  @relation(fields: [image_id], references: [id], onDelete: Cascade)
+
+  @@unique([rating_id, image_id])              // tránh gắn trùng cùng 1 ảnh
+  @@index([rating_id, position])
 }
