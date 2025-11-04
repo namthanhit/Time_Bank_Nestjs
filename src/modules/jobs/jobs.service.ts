@@ -7,7 +7,7 @@ import { CreateJobDto } from './typings/job.dto';
 import { PrismaService } from 'src/infra/prisma/prisma.service';
 import { JobStatus, JobVisibility } from './typings/job.enum';
 import { PaginationRequestDto } from 'src/typings/dtos/pagination.dto';
-import { getQueryParams } from 'src/utils/get-query-params';
+import { getQueryParams, getQueryParamsForAdmin } from 'src/utils/get-query-params';
 import { Prisma, Visibility } from '@prisma/client';
 import { RedisService } from 'src/infra/redis/redis.service';
 import { QueueService } from 'src/infra/queue/queue.service';
@@ -261,6 +261,66 @@ export class JobsService {
     return result;
   }
 
+  async getAllJobs(userId: string, pagingInfo: PaginationRequestDto) {
+    const { queryParams, metadata } = getQueryParamsForAdmin(pagingInfo);
+    const cacheKey = `jobs:my:${userId}:page:${metadata.page}:search:${pagingInfo.search || ''}`;
+
+    const cached = await this.redisService.get(cacheKey);
+    if (cached) return { ...cached, fromCache: true };
+
+    const where: Prisma.ServiceWhereInput = { };
+
+    if (pagingInfo.type?.length)
+      where.status = { in: pagingInfo.type as JobStatus[] };
+
+    if (pagingInfo.search) {
+      const keyword = pagingInfo.search.trim();
+      where.OR = [
+        { title: { contains: keyword } },
+        { description: { contains: keyword } },
+        { place: { contains: keyword } },
+      ];
+    }
+    const [items, total] = await Promise.all([
+      this.prismaService.service.findMany({
+        where,
+        skip: queryParams.paging.skip,
+        take: queryParams.paging.take,
+        orderBy: queryParams.orderBy,
+        include: {
+          serviceSkills: {
+            include: {
+              skill: {
+                select: {
+                  id: true,
+                  name: true,
+                },
+              },
+            },
+          },
+        },
+      }),
+      this.prismaService.service.count({ where }),
+    ]);
+
+    const result = {
+      data: items.map((item) => ({
+        ...item,
+        skills: item.serviceSkills.map((ss) => ss.skill),
+        serviceSkills: undefined,
+      })),
+      metadata: {
+        total,
+        page: metadata.page,
+        pageSize: metadata.pageSize,
+        totalPages: Math.ceil(total / metadata.pageSize),
+      },
+    };
+
+    await this.redisService.set(cacheKey, result, 30);
+    return result;
+  }
+
   async getDetailMyJob(userId: string, jobId: string) {
     const cacheKey = `jobs:my-detail:${userId}:${jobId}`;
     const cached = await this.redisService.get(cacheKey);
@@ -286,22 +346,33 @@ export class JobsService {
             },
           },
         },
-        serviceImages:{
+        serviceImages: {
           include: {
             image: {
-              select:{
+              select: {
                 id: true,
-                url: true
-              }
-            }
-          }
-        }
+                url: true,
+              },
+            },
+          },
+        },
       },
     });
-    if (!job) throw new NotFoundException(`Job with ID ${jobId} not found`);
 
-    await this.redisService.set(cacheKey, job, 300);
-    return job;
+    if (!job) throw new NotFoundException(`Job with ID ${jobId} not found`);
+    const transformedJob = {
+      ...job,
+      skills: job.serviceSkills?.map((ss) => ss.skill) ?? [],
+      serviceImages:
+        job.serviceImages?.map((si) => ({
+          id: si.image?.id ?? si.id,
+          url: si.image?.url ?? null,
+        })) ?? [],
+      serviceSkills: undefined,
+    };
+    await this.redisService.set(cacheKey, transformedJob, 300);
+
+    return transformedJob;
   }
 
   async updateMyJob(userId: string, jobId: string, updateJobDto: CreateJobDto) {
@@ -378,23 +449,23 @@ export class JobsService {
     });
   }
 
-  async blockJobById(jobId: string){
+  async blockJobById(jobId: string) {
     const existingJob = this.prismaService.service.findUnique({
-      where:{
-        id: jobId
-      }
-    })
-
-    if (!existingJob) throw new NotFoundException("Not found")
-    
-    await this.prismaService.service.update({
-      where:{
+      where: {
         id: jobId,
-        status: JobStatus.OPEN || JobStatus.MATCHED
       },
-      data:{
-        status: JobStatus.BANNED
-      }
-    })
+    });
+
+    if (!existingJob) throw new NotFoundException('Not found');
+
+    await this.prismaService.service.update({
+      where: {
+        id: jobId,
+        status: JobStatus.OPEN || JobStatus.MATCHED,
+      },
+      data: {
+        status: JobStatus.BANNED,
+      },
+    });
   }
 }

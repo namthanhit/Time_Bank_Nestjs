@@ -1,4 +1,4 @@
-import { IsOptional, IsString, Length } from 'class-validator';
+import { IsNotEmpty, IsOptional, IsString, Length } from 'class-validator';
 
 export class LoginDto {
   @IsString()
@@ -13,4 +13,20 @@ export class LoginDto {
   @IsOptional()
   @IsString()
   deviceName?: string;
+}
+
+export class LoginAdminDto {
+  @IsString()
+  fullname!: string;
+
+  @IsString()
+  password!: string;
+
+  @IsOptional()
+  @IsString()
+  deviceInfo?: string;
+
+  @IsOptional()
+  @IsString()
+  ip?: string;
 }
