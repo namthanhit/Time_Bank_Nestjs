@@ -8,6 +8,15 @@ async function bootstrap() {
 
   app.setGlobalPrefix('api/v1');
 
+  // Temporary request logger to debug Authorization header issues
+  app.use((req: any, res: any, next: any) => {
+    try {
+      // eslint-disable-next-line no-console
+      console.log('[Request Logger]', req.method, req.originalUrl || req.url, 'Authorization=', req.headers?.authorization);
+    } catch (e) {}
+    next();
+  });
+
   app.useGlobalPipes(
     new ValidationPipe({
       whitelist: true,

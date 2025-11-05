@@ -86,8 +86,14 @@ export class JobsController {
   }
 
   @Delete(':jobId/block-job')
-  @UseGuards(AdminGuard)
+  @UseGuards(JwtAuthGuard, AdminGuard)
   async blockJob(@Param('jobId') jobId: string) {
     return this.jobsService.blockJobById(jobId);
+  }
+
+  @Patch(':jobId/unblock-job')
+  @UseGuards(JwtAuthGuard, AdminGuard)
+  async unblockJob(@Param('jobId') jobId: string) {
+    return this.jobsService.unblockJobById(jobId);
   }
 }

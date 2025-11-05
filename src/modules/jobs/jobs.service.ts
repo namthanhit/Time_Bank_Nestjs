@@ -263,10 +263,11 @@ export class JobsService {
 
   async getAllJobs(userId: string, pagingInfo: PaginationRequestDto) {
     const { queryParams, metadata } = getQueryParamsForAdmin(pagingInfo);
-    const cacheKey = `jobs:my:${userId}:page:${metadata.page}:search:${pagingInfo.search || ''}`;
-
-    const cached = await this.redisService.get(cacheKey);
-    if (cached) return { ...cached, fromCache: true };
+    
+    // Không dùng cache cho admin để luôn lấy data mới nhất
+    // const cacheKey = `jobs:admin:all:page:${metadata.page}:search:${pagingInfo.search || ''}:type:${pagingInfo.type?.join(',') || 'all'}`;
+    // const cached = await this.redisService.get(cacheKey);
+    // if (cached) return { ...cached, fromCache: true };
 
     const where: Prisma.ServiceWhereInput = { };
 
@@ -317,7 +318,7 @@ export class JobsService {
       },
     };
 
-    await this.redisService.set(cacheKey, result, 30);
+    // Không cache cho admin - luôn lấy data mới
     return result;
   }
 
@@ -450,22 +451,56 @@ export class JobsService {
   }
 
   async blockJobById(jobId: string) {
-    const existingJob = this.prismaService.service.findUnique({
+    const existingJob = await this.prismaService.service.findUnique({
       where: {
         id: jobId,
       },
     });
 
-    if (!existingJob) throw new NotFoundException('Not found');
+    if (!existingJob) throw new NotFoundException('Job not found');
 
     await this.prismaService.service.update({
       where: {
         id: jobId,
-        status: JobStatus.OPEN || JobStatus.MATCHED,
       },
       data: {
-        status: JobStatus.BANNED,
+        status: JobStatus.CANCELLED,
       },
     });
+
+    // Xóa tất cả cache liên quan
+    await this.redisService.del(`jobs:admin:*`);
+    await this.redisService.del(`jobs:my:*`);
+    await this.redisService.del(`jobs:feed:*`);
+    await this.redisService.del(`jobs:detail:${jobId}`);
+
+    return { success: true };
+  }
+
+  async unblockJobById(jobId: string) {
+    const existingJob = await this.prismaService.service.findUnique({
+      where: {
+        id: jobId,
+      },
+    });
+
+    if (!existingJob) throw new NotFoundException('Job not found');
+
+    await this.prismaService.service.update({
+      where: {
+        id: jobId,
+      },
+      data: {
+        status: JobStatus.OPEN,
+      },
+    });
+
+    // Xóa tất cả cache liên quan
+    await this.redisService.del(`jobs:admin:*`);
+    await this.redisService.del(`jobs:my:*`);
+    await this.redisService.del(`jobs:feed:*`);
+    await this.redisService.del(`jobs:detail:${jobId}`);
+
+    return { success: true };
   }
 }

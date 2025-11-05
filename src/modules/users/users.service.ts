@@ -81,24 +81,44 @@ export class UsersService {
   }
 
   async blockUserById(userId: string) {
-    const existingUser = this.prisma.user.findUnique({
+    const existingUser = await this.prisma.user.findUnique({
       where: {
         id: userId,
       },
     });
 
-    if (!existingUser) throw new NotFoundException("Not found user")
+    if (!existingUser) throw new NotFoundException("Not found user");
 
     await this.prisma.user.update({
       where: {
         id: userId,
-        status: UserStatus.active
       },
       data: {
         status: UserStatus.banned
       }
-    })
+    });
 
-    return { success: true }
+    return { success: true, message: 'User blocked successfully' };
+  }
+
+  async unblockUserById(userId: string) {
+    const existingUser = await this.prisma.user.findUnique({
+      where: {
+        id: userId,
+      },
+    });
+
+    if (!existingUser) throw new NotFoundException("Not found user");
+
+    await this.prisma.user.update({
+      where: {
+        id: userId,
+      },
+      data: {
+        status: UserStatus.active
+      }
+    });
+
+    return { success: true, message: 'User unblocked successfully' };
   }
 }

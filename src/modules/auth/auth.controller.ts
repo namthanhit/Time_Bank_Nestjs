@@ -61,4 +61,27 @@ export class AuthController {
     const userId = String(req.user.sub);
     return this.authService.logoutAll(userId);
   }
+
+  // Temporary debug endpoint: return decoded req.user for testing tokens
+  @Post('whoami')
+  @HttpCode(200)
+  @UseGuards(JwtAuthGuard)
+  async whoami(@Req() req: any) {
+    return { user: req.user };
+  }
+
+  // Temporary endpoint to verify a raw JWT with server secret and return the error/payload.
+  // Useful to debug signature/expiry issues when clients present tokens.
+  @Post('verify-token')
+  @HttpCode(200)
+  async verifyToken(@Body() body: { token: string }) {
+    const jwt = require('jsonwebtoken');
+    const JWT_SECRET = process.env.JWT_SECRET!;
+    try {
+      const payload = jwt.verify(body.token, JWT_SECRET);
+      return { ok: true, payload };
+    } catch (err: any) {
+      return { ok: false, message: err?.message || String(err) };
+    }
+  }
 }

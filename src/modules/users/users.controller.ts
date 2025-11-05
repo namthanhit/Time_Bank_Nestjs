@@ -10,7 +10,7 @@ export class UsersController {
   constructor(private readonly usersService: UsersService) {}
   // Lấy danh sách tất cả người dùng (chỉ dành cho admin)
   @Get()
-  @UseGuards(AdminGuard)
+  @UseGuards(JwtAuthGuard, AdminGuard)
   findAll() {
     return this.usersService.findAll();
   }
@@ -30,8 +30,14 @@ export class UsersController {
   }
 
   @Delete(':userId/block-user')
-  @UseGuards(AdminGuard)
-  async blockUser(@Param(':userId') userId: string) {
+  @UseGuards(JwtAuthGuard, AdminGuard)
+  async blockUser(@Param('userId') userId: string) {
     return this.usersService.blockUserById(userId);
+  }
+
+  @Patch(':userId/unblock-user')
+  @UseGuards(JwtAuthGuard, AdminGuard)
+  async unblockUser(@Param('userId') userId: string) {
+    return this.usersService.unblockUserById(userId);
   }
 }

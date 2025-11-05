@@ -9,8 +9,16 @@ import * as jwt from 'jsonwebtoken';
 import { add } from 'date-fns';
 import { FirebaseService } from 'src/infra/firebase/firebase.service';
 
-const ACCESS_TTL = process.env.JWT_ACCESS_TTL || '15m';
-const REFRESH_TTL = process.env.JWT_REFRESH_TTL || '30d';
+// Read raw TTL strings from env. Support both numeric (seconds) and human-friendly values like '15m', '30d'.
+const ACCESS_TTL_RAW = process.env.JWT_ACCESS_TTL || '15m';
+const REFRESH_TTL_RAW = process.env.JWT_REFRESH_TTL || '30d';
+// If the env value is a plain number string (e.g. '3600'), interpret as seconds (number)
+const ACCESS_TTL: string | number = /^\d+$/.test(String(ACCESS_TTL_RAW))
+  ? Number(ACCESS_TTL_RAW)
+  : String(ACCESS_TTL_RAW);
+const REFRESH_TTL: string | number = /^\d+$/.test(String(REFRESH_TTL_RAW))
+  ? Number(REFRESH_TTL_RAW)
+  : String(REFRESH_TTL_RAW);
 const JWT_SECRET = process.env.JWT_SECRET!;
 
 const LOGIN_MAX_ATTEMPTS = Number(process.env.LOGIN_MAX_ATTEMPTS || 5);
@@ -19,6 +27,12 @@ const LOGIN_LOCK_MINUTES = Number(process.env.LOGIN_LOCK_MINUTES || 15);
 function parseExpiryToDate(ttl: string): Date {
   // Hỗ trợ s/m/h/d, mặc định 15 phút
   const now = new Date();
+  // If ttl is a plain number (seconds), treat as seconds
+  if (/^\d+$/.test(ttl)) {
+    const n = Number(ttl);
+    return add(now, { seconds: n });
+  }
+
   const m = ttl.match(/^(\d+)([smhd])$/i);
   if (!m) return add(now, { minutes: 15 });
   const n = Number(m[1]);
@@ -131,7 +145,7 @@ export class AuthService {
 
     // lưu refresh token (hash)
     const token_hash = await argon2.hash(refresh_token);
-    const expires_at = parseExpiryToDate(REFRESH_TTL);
+  const expires_at = parseExpiryToDate(String(REFRESH_TTL));
 
     await this.prisma.refreshToken.create({
       data: {
@@ -227,7 +241,7 @@ export class AuthService {
 
     // lưu refresh token (hash)
     const token_hash = await argon2.hash(refresh_token);
-    const expires_at = parseExpiryToDate(REFRESH_TTL);
+  const expires_at = parseExpiryToDate(String(REFRESH_TTL));
 
     await this.prisma.refreshToken.create({
       data: {
@@ -319,7 +333,7 @@ export class AuthService {
         });
 
         const token_hash = await argon2.hash(new_refresh);
-        const expires_at = parseExpiryToDate(REFRESH_TTL);
+  const expires_at = parseExpiryToDate(String(REFRESH_TTL));
 
         await tx.refreshToken.create({
           data: {
