@@ -1,6 +1,6 @@
 import { Body, Controller, HttpCode, Post, Req, UseGuards } from '@nestjs/common';
 import { AuthService } from './auth.service';
-import { LoginDto } from './dtos/login.dto';
+import { LoginAdminDto, LoginDto } from './dtos/login.dto';
 import { RefreshDto } from './dtos/refresh.dto';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 
@@ -17,6 +17,18 @@ export class AuthController {
 
     return this.authService.login({
       phone: dto.phone,
+      password: dto.password,
+      ip,
+      deviceInfo,
+    });
+  }
+
+  @Post('admin/login')
+  async loginAdmin(@Body() dto: LoginAdminDto, @Req() req: any) {
+    const ip = dto.ip || req.ip;
+    const deviceInfo = dto.deviceInfo || req.get('User-Agent') || undefined;
+    return this.authService.loginAdmin({
+      fullname: dto.fullname,
       password: dto.password,
       ip,
       deviceInfo,

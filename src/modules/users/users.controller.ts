@@ -3,12 +3,14 @@ import { UsersService } from './users.service';
 import { UpdateUserDto } from './typings/user.update.dto';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { UserId } from '../../common/decorators/user-id.decorator';
+import { AdminGuard } from 'src/common/guards/admin-guard';
 
 @Controller('users')
 export class UsersController {
   constructor(private readonly usersService: UsersService) {}
   // Lấy danh sách tất cả người dùng (chỉ dành cho admin)
   @Get()
+  @UseGuards(AdminGuard)
   findAll() {
     return this.usersService.findAll();
   }
@@ -28,6 +30,7 @@ export class UsersController {
   }
 
   @Delete(':userId/block-user')
+  @UseGuards(AdminGuard)
   async blockUser(@Param(':userId') userId: string) {
     return this.usersService.blockUserById(userId);
   }
