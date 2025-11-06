@@ -81,7 +81,7 @@ export class UsersService {
   }
 
   async blockUserById(userId: string) {
-    const existingUser = this.prisma.user.findUnique({
+    const existingUser = await this.prisma.user.findUnique({
       where: {
         id: userId,
       },
@@ -91,13 +91,34 @@ export class UsersService {
 
     await this.prisma.user.update({
       where: {
-        id: userId,
+        id: existingUser.id,
         status: UserStatus.active
       },
       data: {
         status: UserStatus.banned
       }
     })
+
+    return { success: true }
+  }
+
+  async unblockUserById(userId: string) {
+    const existingUser = await this.prisma.user.findUnique({
+      where: {
+        id: userId,
+      },
+    });
+
+    if (!existingUser) throw new NotFoundException("Not found user");
+
+    await this.prisma.user.update({
+      where: {
+        id: userId,
+      },
+      data: {
+        status: UserStatus.active
+      }
+    });
 
     return { success: true }
   }
