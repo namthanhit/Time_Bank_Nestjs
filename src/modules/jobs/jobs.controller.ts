@@ -90,4 +90,10 @@ export class JobsController {
   async blockJob(@Param('jobId') jobId: string) {
     return this.jobsService.blockJobById(jobId);
   }
+
+  @Patch(':jobId/unblock-job')
+  @UseGuards(AdminGuard)
+  async unblockJob(@Param('jobId') jobId: string) {
+    return this.jobsService.unblockJobById(jobId);
+  }
 }

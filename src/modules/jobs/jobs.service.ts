@@ -7,7 +7,10 @@ import { CreateJobDto } from './typings/job.dto';
 import { PrismaService } from 'src/infra/prisma/prisma.service';
 import { JobStatus, JobVisibility } from './typings/job.enum';
 import { PaginationRequestDto } from 'src/typings/dtos/pagination.dto';
-import { getQueryParams, getQueryParamsForAdmin } from 'src/utils/get-query-params';
+import {
+  getQueryParams,
+  getQueryParamsForAdmin,
+} from 'src/utils/get-query-params';
 import { Prisma, Visibility } from '@prisma/client';
 import { RedisService } from 'src/infra/redis/redis.service';
 import { QueueService } from 'src/infra/queue/queue.service';
@@ -18,7 +21,6 @@ import { TWENTY_FOUR_HOURS_MS } from 'src/common/constants';
 export class JobsService {
   constructor(
     private readonly prismaService: PrismaService,
-    private readonly redisService: RedisService,
     private readonly escrowsService: EscrowsService,
     private readonly queueService: QueueService,
   ) {}
@@ -82,17 +84,11 @@ export class JobsService {
       `delete-pending-job-${job.id}`,
     );
 
-    await this.redisService.del(`jobs:feed:${userId}*`);
-    await this.redisService.del(`jobs:my:${userId}*`);
     return { success: true };
   }
 
   async findJobCommunity(userId: string, pagingInfo: PaginationRequestDto) {
     const { queryParams, metadata } = getQueryParams(pagingInfo);
-    const cacheKey = `jobs:feed:${userId}:page:${metadata.page}:search:${pagingInfo.search || ''}`;
-
-    const cached = await this.redisService.get(cacheKey);
-    if (cached) return { ...cached, fromCache: true };
 
     const followingList = await this.prismaService.follow.findMany({
       where: { follower_id: userId },
@@ -164,15 +160,10 @@ export class JobsService {
       },
     };
 
-    await this.redisService.set(cacheKey, result, 30);
     return result;
   }
 
   async getJobById(userId: string, jobId: string) {
-    const cacheKey = `jobs:detail:${jobId}`;
-    const cached = await this.redisService.get(cacheKey);
-    if (cached) return cached;
-
     const job = await this.prismaService.service.findUnique({
       where: { id: jobId },
     });
@@ -190,17 +181,11 @@ export class JobsService {
       throw new ForbiddenException('You do not have permission');
     }
 
-    await this.redisService.set(cacheKey, job, 300);
     return job;
   }
 
   async getAllMyJobs(userId: string, pagingInfo: PaginationRequestDto) {
     const { queryParams, metadata } = getQueryParams(pagingInfo);
-    const cacheKey = `jobs:my:${userId}:page:${metadata.page}:search:${pagingInfo.search || ''}`;
-
-    const cached = await this.redisService.get(cacheKey);
-    if (cached) return { ...cached, fromCache: true };
-
     const where: Prisma.ServiceWhereInput = { user_id: userId };
 
     if (pagingInfo.type?.length)
@@ -257,18 +242,13 @@ export class JobsService {
       },
     };
 
-    await this.redisService.set(cacheKey, result, 30);
     return result;
   }
 
   async getAllJobs(userId: string, pagingInfo: PaginationRequestDto) {
     const { queryParams, metadata } = getQueryParamsForAdmin(pagingInfo);
-    const cacheKey = `jobs:my:${userId}:page:${metadata.page}:search:${pagingInfo.search || ''}`;
 
-    const cached = await this.redisService.get(cacheKey);
-    if (cached) return { ...cached, fromCache: true };
-
-    const where: Prisma.ServiceWhereInput = { };
+    const where: Prisma.ServiceWhereInput = {};
 
     if (pagingInfo.type?.length)
       where.status = { in: pagingInfo.type as JobStatus[] };
@@ -317,15 +297,10 @@ export class JobsService {
       },
     };
 
-    await this.redisService.set(cacheKey, result, 30);
     return result;
   }
 
   async getDetailMyJob(userId: string, jobId: string) {
-    const cacheKey = `jobs:my-detail:${userId}:${jobId}`;
-    const cached = await this.redisService.get(cacheKey);
-    if (cached) return cached;
-
     const job = await this.prismaService.service.findUnique({
       where: { id: jobId, user_id: userId },
       include: {
@@ -370,7 +345,6 @@ export class JobsService {
         })) ?? [],
       serviceSkills: undefined,
     };
-    await this.redisService.set(cacheKey, transformedJob, 300);
 
     return transformedJob;
   }
@@ -409,10 +383,6 @@ export class JobsService {
       });
     });
 
-    await this.redisService.del(`jobs:detail:${jobId}`);
-    await this.redisService.del(`jobs:my-detail:${userId}:${jobId}`);
-    await this.redisService.del(`jobs:my:${userId}*`);
-
     return { data: true };
   }
 
@@ -427,11 +397,6 @@ export class JobsService {
       where: { id: jobId, user_id: userId },
       data: { status: JobStatus.CANCELLED },
     });
-
-    await this.redisService.del(`jobs:detail:${jobId}`);
-    await this.redisService.del(`jobs:my-detail:${userId}:${jobId}`);
-    await this.redisService.del(`jobs:my:${userId}*`);
-    await this.redisService.del(`jobs:feed:${userId}*`);
 
     return { data: true };
   }
@@ -467,5 +432,17 @@ export class JobsService {
         status: JobStatus.BANNED,
       },
     });
+  }
+
+  async unblockJobById(jobId: string) {
+    const existingJob = await this.prismaService.service.findUnique({
+      where: {id: jobId,},
+    });
+    if (!existingJob) throw new NotFoundException('Job not found');
+    await this.prismaService.service.update({
+      where: { id: jobId },
+      data: { status: JobStatus.OPEN },
+    });
+    return { success: true };
   }
 }
