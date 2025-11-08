@@ -151,6 +151,8 @@ model User {
   providerBookings Booking[] @relation("ProviderBookings")
   rateeRatings Rating[] @relation("RateeRatings")
   raterRatings Rating[] @relation("RaterRatings")
+  notifications Notification[]
+  fcm_tokens    FcmToken[]
 }
 
 model UserDetail {
@@ -473,4 +475,41 @@ model Image {
   created_at  DateTime @default(now())
   updated_at  DateTime @default(now()) @updatedAt
   serviceImages ServiceImage[]
+}
+
+enum NotificationType {
+  TRANSFER_OUT   // A: đã chuyển thành công
+  TRANSFER_IN    // B: đã nhận được
+  SYSTEM_ALERT
+}
+
+model Notification {
+  id          String           @id @default(cuid())
+  user_id     String
+  title       String           @db.VarChar(255)
+  body        String           @db.VarChar(512)
+  type        NotificationType
+  data        Json?
+  read        Boolean          @default(false)
+  dedupe_key  String           @db.VarChar(191) // khoá khử trùng lặp
+  created_at  DateTime         @default(now())
+
+  user        User             @relation(fields: [user_id], references: [id])
+
+  @@unique([user_id, dedupe_key]) // 1 user không nhận 2 notif cùng sự kiện
+  @@index([user_id, created_at])
+}
+
+/** Lưu token FCM của thiết bị (không đụng gì đến User hiện tại) */
+model FcmToken {
+  id         String   @id @default(cuid())
+  user_id    String
+  token      String   @db.VarChar(255)
+  is_active  Boolean  @default(true)
+  last_seen  DateTime @default(now())
+
+  user       User     @relation(fields: [user_id], references: [id])
+
+  @@index([user_id, is_active])
+  @@unique([user_id, token])
 }
