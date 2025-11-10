@@ -29,6 +29,14 @@ export class OffersController {
     return this.offersService.getOffersForMyJob(userId, jobId);
   }
 
+  //xem tất cả những đứa ofer vào tất cả job của mình
+  @Get('me/pending-offers')
+  async getAllMyPendingOffers(
+    @UserId() userId: string,
+  ) {
+    return this.offersService.getAllMyPendingOffers(userId);
+  }
+
   //xem những job mình đã ofer
   @Get('me')
   async getMyOffers(@UserId() userId: string) {

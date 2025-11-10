@@ -30,6 +30,39 @@ export class OffersService {
     return { success: true };
   }
 
+  async getAllMyPendingOffers(userId: string) {
+    const offers = await this.prismaService.offer.findMany({
+      where: {
+        status: OfferStatus.pending,
+        service: {
+          user_id: userId,
+        },
+      },
+      include: {
+        user: {
+          select: {
+            id: true,
+            full_name: true,
+            avatar_url: true,
+          },
+        },
+        service: {
+          include: {
+            user: {
+              select: { id: true, full_name: true, avatar_url: true }
+            },
+          serviceSkills:{
+            include:{
+              skill: true
+            }
+          }
+          }
+        }
+      },
+    });
+    return offers;
+  }
+
   async getOffersForMyJob(userId: string, jobId: string) {
     const job = await this.jobsService.getDetailMyJob(userId, jobId);
 
