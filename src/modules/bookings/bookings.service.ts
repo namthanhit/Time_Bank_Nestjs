@@ -97,7 +97,11 @@ export class BookingsService {
     for (const booking of bookings) {
       this.queueService.scheduleJob(
         'Release-escrow-funds',
-        { escrowId: escrow.id, providerId: booking.provider_id, amount: booking.secs_booked },
+        {
+          escrowId: escrow.id,
+          providerId: booking.provider_id,
+          amount: booking.secs_booked,
+        },
         TWENTY_FOUR_HOURS_MS,
         `release-escrow-funds-${escrow.id}-${booking.provider_id}-${booking.id}`,
       );
@@ -196,5 +200,20 @@ export class BookingsService {
     return {
       success: true,
     };
+  }
+
+  async getCountBookedByjobId(userId: string, jobId: string) {
+    const job = await this.prismaService.service.findUnique({
+      where: { id: jobId },
+    });
+    if (!job) throw new NotFoundException("Not found job")
+
+    const count = await this.prismaService.booking.count({
+      where: {
+        service_id: jobId
+      }
+    })
+
+    return count;
   }
 }

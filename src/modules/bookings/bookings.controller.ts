@@ -25,4 +25,12 @@ export class BookingsController {
   ){
     return this.bookingService.getBookingByOfferId(userId, offerId)
   }
+
+  @Get("count-booked")
+  async getCountBooked(
+    @UserId() userId: string,
+    @Param("jobId") jobId: string
+  ){
+    return this.bookingService.getCountBookedByjobId(userId, jobId)
+  }
 }
