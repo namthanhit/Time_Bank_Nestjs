@@ -3,15 +3,13 @@ import { PrismaService } from 'src/infra/prisma/prisma.service';
 
 @Injectable()
 export class RegionService {
-  constructor(
-    private prisma: PrismaService
-  ) {}
+  constructor(private prisma: PrismaService) {}
 
   // Lấy tất cả tỉnh/thành
   async getProvinces() {
     return this.prisma.region.findMany({
       where: { type: 'province' },
-      orderBy: { name: 'asc' }
+      orderBy: { name: 'asc' },
     });
   }
 
@@ -47,7 +45,13 @@ export class RegionService {
   async getRegionDetail(id: string) {
     const region = await this.prisma.region.findUnique({
       where: { id },
-      include: { parent: true },
+      include: {
+        parent: {
+          include: {
+            parent: true
+          }
+        },
+      },
     });
     if (!region) throw new NotFoundException('Region not found');
     return region;

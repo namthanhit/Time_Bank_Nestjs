@@ -167,6 +167,21 @@ export class BookingsService {
     return booking;
   }
 
+  async getMyListBooked(userId: string) {
+    const jobsBooked = await this.prismaService.booking.findMany({
+      where: {
+        status: { in: [BookingStatus.scheduled, BookingStatus.ongoing] },
+      },
+      include: {
+        service: {
+          select: { id: true, title: true },
+        },
+      },
+    });
+
+    return jobsBooked;
+  }
+
   async checkInBooking(providerId: string, bookingId: string) {
     const booking = await this.prismaService.booking.findUnique({
       where: { id: bookingId },
@@ -206,13 +221,13 @@ export class BookingsService {
     const job = await this.prismaService.service.findUnique({
       where: { id: jobId },
     });
-    if (!job) throw new NotFoundException("Not found job")
+    if (!job) throw new NotFoundException('Not found job');
 
     const count = await this.prismaService.booking.count({
       where: {
-        service_id: jobId
-      }
-    })
+        service_id: jobId,
+      },
+    });
 
     return count;
   }
