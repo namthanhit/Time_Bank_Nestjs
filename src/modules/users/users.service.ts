@@ -4,10 +4,15 @@ import { UpdateUserDto } from './typings/user.update.dto';
 import { PrismaService } from 'src/infra/prisma/prisma.service';
 import e from 'express';
 import { UserStatus } from '@prisma/client';
+import { console } from 'inspector';
+import { RegionService } from '../region/region.service';
 
 @Injectable()
 export class UsersService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly regionService: RegionService
+  ) {}
 
   async findAll() {
     return this.prisma.user.findMany();
@@ -22,9 +27,15 @@ export class UsersService {
       where: { user_id: id },
     });
 
+    let region;
+    if (userDetail?.region_id) {
+      region = await this.regionService.getRegionDetail(userDetail.region_id);
+    }
+
     return {
       ...user,
       userDetail,
+      region,
     };
   }
 
@@ -87,19 +98,19 @@ export class UsersService {
       },
     });
 
-    if (!existingUser) throw new NotFoundException("Not found user")
+    if (!existingUser) throw new NotFoundException('Not found user');
 
     await this.prisma.user.update({
       where: {
         id: existingUser.id,
-        status: UserStatus.active
+        status: UserStatus.active,
       },
       data: {
-        status: UserStatus.banned
-      }
-    })
+        status: UserStatus.banned,
+      },
+    });
 
-    return { success: true }
+    return { success: true };
   }
 
   async unblockUserById(userId: string) {
@@ -109,17 +120,17 @@ export class UsersService {
       },
     });
 
-    if (!existingUser) throw new NotFoundException("Not found user");
+    if (!existingUser) throw new NotFoundException('Not found user');
 
     await this.prisma.user.update({
       where: {
         id: userId,
       },
       data: {
-        status: UserStatus.active
-      }
+        status: UserStatus.active,
+      },
     });
 
-    return { success: true }
+    return { success: true };
   }
 }
