@@ -7,7 +7,7 @@ import { CreateUserDto } from './typings/create-user.dto';
 import { UpdateUserDto } from './typings/user.update.dto';
 import { PrismaService } from 'src/infra/prisma/prisma.service';
 import e from 'express';
-import { UserStatus } from '@prisma/client';
+import { Prisma, User, UserDetail, UserStatus } from '@prisma/client';
 import { console } from 'inspector';
 import { RegionService } from '../region/region.service';
 
@@ -44,25 +44,6 @@ export class UsersService {
   }
 
   async updateUserById(id: string, dto: UpdateUserDto) {
-    const {
-      email,
-      phone,
-      birth_date,
-      description,
-      work_address,
-      study_address,
-      social_network,
-    } = dto;
-    const userData = { email, phone };
-
-    const userDetailData = {
-      birth_date,
-      description,
-      work_address,
-      study_address,
-      social_network,
-    };
-
     const user = await this.prisma.user.findUnique({
       where: { id },
     });
@@ -70,6 +51,30 @@ export class UsersService {
     if (!user) {
       throw new NotFoundException(`User with ID ${id} not found`);
     }
+
+    const {
+      email,
+      phone,
+      birth_date,
+      description,
+      address, 
+      work_address,
+      study_address,
+      street,
+      social_network,
+    } = dto;
+
+    const userData = { email, phone };
+
+    const userDetailData = {
+      birth_date,
+      description,
+      address,
+      work_address,
+      study_address,
+      street,
+      social_network,
+    };
 
     if (email) {
       const existingEmailUser = await this.prisma.user.findUnique({
@@ -89,22 +94,41 @@ export class UsersService {
       }
     }
 
-    const [updatedUser] = await this.prisma.$transaction([
-      this.prisma.user.update({
-        where: { id },
-        data: userData,
-      }),
+    const cleanUserData = Object.fromEntries(
+      Object.entries(userData).filter(([_, v]) => v !== undefined),
+    );
 
-      this.prisma.userDetail.upsert({
-        where: { user_id: id },
-        update: userDetailData,
-        create: {
-          user_id: id,
-          ...userDetailData,
-        },
-      }),
-    ]);
-    return updatedUser;
+    const cleanUserDetailData = Object.fromEntries(
+      Object.entries(userDetailData).filter(([_, v]) => v !== undefined),
+    );
+
+    const transactionOperations: Prisma.PrismaPromise<User | UserDetail>[] = [];
+    if (Object.keys(cleanUserData).length > 0) {
+      transactionOperations.push(
+        this.prisma.user.update({
+          where: { id },
+          data: cleanUserData,
+        }),
+      );
+    }
+
+    if (Object.keys(cleanUserDetailData).length > 0) {
+      transactionOperations.push(
+        this.prisma.userDetail.upsert({
+          where: { user_id: id },
+          update: cleanUserDetailData,
+          create: {
+            user_id: id,
+            ...cleanUserDetailData,
+          },
+        }),
+      );
+    }
+
+    if (transactionOperations.length > 0) {
+      await this.prisma.$transaction(transactionOperations);
+    }
+    return { success: true }
   }
 
   async blockUserById(userId: string) {
