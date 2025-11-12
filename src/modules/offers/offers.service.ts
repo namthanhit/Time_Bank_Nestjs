@@ -22,6 +22,11 @@ export class OffersService {
 
   async createOffer(userId: string, dto: OfferDto) {
     const job = await this.jobsService.getJobById(userId, dto.job_id);
+    const existingOffer = await this.prismaService.offer.findFirst({
+      where: { service_id: job.id, user_id: userId}
+    })
+
+    if (existingOffer) throw new BadRequestException("Offer existed")
 
     const data: Prisma.OfferCreateInput = {
       user: { connect: { id: userId } },

@@ -37,6 +37,12 @@ export class UsersController {
     return this.usersService.getUserDetailById(userId);
   }
 
+  @UseGuards(JwtAuthGuard)
+  @Get(':id')
+  async getUserById(@Param(":id") userId: string) {
+    return this.usersService.getUserDetailById(userId);
+  }
+
   // Cập nhật hồ sơ của chính mình
   @UseGuards(JwtAuthGuard)
   @Patch('me/edit-profile')
