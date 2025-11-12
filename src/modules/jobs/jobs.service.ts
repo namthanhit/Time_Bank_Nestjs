@@ -209,7 +209,7 @@ export class JobsService {
     ) {
       throw new ForbiddenException('You do not have permission');
     }
-    
+
     const transformedJob = {
       ...job,
       skills: job.serviceSkills?.map((ss) => ss.skill) ?? [],
