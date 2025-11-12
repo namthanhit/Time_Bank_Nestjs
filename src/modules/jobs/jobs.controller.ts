@@ -50,7 +50,7 @@ export class JobsController {
     return this.jobsService.findJobCommunity(userId, pagingInfo);
   }
 
-  @Get(':id')
+  @Get(':jobId')
   async getJobById(@UserId() userId: string, @Param('jobId') jobId: string) {
     return this.jobsService.getJobById(userId, jobId);
   }
