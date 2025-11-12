@@ -1,4 +1,8 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import {
+  ConflictException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 import { CreateUserDto } from './typings/create-user.dto';
 import { UpdateUserDto } from './typings/user.update.dto';
 import { PrismaService } from 'src/infra/prisma/prisma.service';
@@ -11,7 +15,7 @@ import { RegionService } from '../region/region.service';
 export class UsersService {
   constructor(
     private readonly prisma: PrismaService,
-    private readonly regionService: RegionService
+    private readonly regionService: RegionService,
   ) {}
 
   async findAll() {
@@ -40,55 +44,67 @@ export class UsersService {
   }
 
   async updateUserById(id: string, dto: UpdateUserDto) {
+    const {
+      email,
+      phone,
+      birth_date,
+      description,
+      work_address,
+      study_address,
+      social_network,
+    } = dto;
+    const userData = { email, phone };
+
+    const userDetailData = {
+      birth_date,
+      description,
+      work_address,
+      study_address,
+      social_network,
+    };
+
     const user = await this.prisma.user.findUnique({
       where: { id },
     });
 
-    if (!user) throw new Error('User not found');
-
-    const existingEmailUser = await this.prisma.user.findUnique({
-      where: { email: dto.email },
-    });
-    if (existingEmailUser && existingEmailUser.id !== id) {
-      throw new Error('Email already in use');
+    if (!user) {
+      throw new NotFoundException(`User with ID ${id} not found`);
     }
 
-    const existingPhoneUser = await this.prisma.user.findUnique({
-      where: { phone: dto.phone },
-    });
-    if (existingPhoneUser && existingPhoneUser.id !== id) {
-      throw new Error('Phone number already in use');
-    }
-
-    //tạo transaction
-    const result = await this.prisma.$transaction(async (tx) => {
-      await tx.user.update({
-        where: { id },
-        data: {
-          phone: dto.phone,
-          email: dto.email,
-        },
+    if (email) {
+      const existingEmailUser = await this.prisma.user.findUnique({
+        where: { email },
       });
-
-      let userDetail = await tx.userDetail.findUnique({
-        where: { user_id: id },
-      });
-
-      if (userDetail) {
-        await tx.userDetail.update({
-          where: { user_id: id },
-          data: {
-            birth_date: dto.birth_date,
-            description: dto.description,
-            //address: dto.address,
-            work_address: dto.work_address,
-            study_address: dto.study_address,
-            social_network: dto.social_network,
-          },
-        });
+      if (existingEmailUser && existingEmailUser.id !== id) {
+        throw new ConflictException('Email already in use');
       }
-    });
-    return result;
+    }
+
+    if (phone) {
+      const existingPhoneUser = await this.prisma.user.findUnique({
+        where: { phone },
+      });
+      if (existingPhoneUser && existingPhoneUser.id !== id) {
+        throw new ConflictException('Phone number already in use');
+      }
+    }
+
+    const [updatedUser] = await this.prisma.$transaction([
+      this.prisma.user.update({
+        where: { id },
+        data: userData,
+      }),
+
+      this.prisma.userDetail.upsert({
+        where: { user_id: id },
+        update: userDetailData,
+        create: {
+          user_id: id,
+          ...userDetailData,
+        },
+      }),
+    ]);
+    return updatedUser;
   }
 
   async blockUserById(userId: string) {
