@@ -20,6 +20,7 @@ import {
 import * as bcrypt from 'bcrypt';
 import { JobStatus } from '../jobs/typings/job.enum';
 import { QueueService } from 'src/infra/queue/queue.service';
+import { NotificationsService } from '../notifications/notifications.service';
 
 const PIN_MAX_FAILS = 5;
 const PIN_LOCK_MINUTES = 5;
@@ -29,6 +30,7 @@ export class TransferService {
   constructor(
     private prisma: PrismaService,
     private readonly queueService: QueueService,
+    private readonly notifications: NotificationsService,
   ) {}
 
   // (1) Lookup: đảm bảo có người nhận & không phải chính mình
@@ -164,7 +166,8 @@ export class TransferService {
   // (3) Execute: verify PIN, sau đó thực thi ngay
   async executeNoRecheck(fromUserId: string, dto: CreateTransferDto) {
     await this.validateSenderPrerequisites(fromUserId, dto.pin);
-    return this.prisma.$transaction(async (tx) => {
+
+    const result = await this.prisma.$transaction(async (tx) => {
       const to = await tx.user.findUnique({
         where: { phone: dto.to_phone },
         select: { id: true },
@@ -189,11 +192,11 @@ export class TransferService {
       });
 
       // cập nhật số dư
-      const updatedFrom = await tx.wallet.update({
+      await tx.wallet.update({
         where: { id: fromWallet.id },
         data: { secs: { decrement: dto.secs } },
       });
-      const updatedTo = await tx.wallet.update({
+      await tx.wallet.update({
         where: { id: toWallet.id },
         data: { secs: { increment: dto.secs } },
       });
@@ -229,8 +232,20 @@ export class TransferService {
           created_at: transfer.created_at,
           completed_at: transfer.completed_at,
         },
+        toUserId: to.id, 
       };
     });
+
+    // Gửi thông báo sau khi transaction đã commit
+    await this.notifications.pushTransferPair({
+      id: result.transfer.id,
+      senderUserId: fromUserId,
+      receiverUserId: result.toUserId,
+      secs: result.transfer.secs,
+      completedAt: result.transfer.completed_at ?? new Date(),
+    });
+
+    return result;
   }
 
   async transferToEscrow(fromUserId: string, dto: TransferToEscrowDto) {
@@ -331,43 +346,91 @@ export class TransferService {
     if (!providerWallet)
       throw new NotFoundException('Provider wallet not found');
 
-    if (escrow.secs > amount) {
+    // Sửa so sánh: số tiền chuyển phải <= escrow.secs
+    if (amount > escrow.secs) {
       throw new BadRequestException('Amount exceeds escrow secs');
     }
 
-    await this.prisma.$transaction(async (tx) => {
+    // Tìm giao dịch funding gần nhất để xác định buyer (senderUserId)
+    const funding = await this.prisma.transfer.findFirst({
+      where: { to_escrow_id: escrow.id },
+      orderBy: { created_at: 'desc' },
+      select: { from_wallet_id: true },
+    });
+    let senderUserId: string | null = null;
+    if (funding?.from_wallet_id) {
+      const fromWallet = await this.prisma.wallet.findUnique({
+        where: { id: funding.from_wallet_id },
+        select: { user_id: true },
+      });
+      senderUserId = fromWallet?.user_id ?? null;
+    }
+
+    const result = await this.prisma.$transaction(async (tx) => {
+      // tạo transfer completed từ escrow -> provider (đúng 'amount')
       const transfer = await tx.transfer.create({
         data: {
           from_escrow_id: escrow.id,
           to_wallet_id: providerWallet.id,
-          secs: escrow.secs,
+          secs: amount,
           status: TransferStatus.completed,
           completed_at: new Date(),
         },
       });
 
+      // cập nhật escrow - amount
       await tx.escrowWallet.update({
         where: { id: escrow.id },
-        data: { secs: 0 },
+        data: { secs: { decrement: amount } },
       });
 
+      // cộng vào ví provider
       await tx.wallet.update({
         where: { id: providerWallet.id },
-        data: { secs: { increment: escrow.secs } },
+        data: { secs: { increment: amount } },
       });
 
-      await tx.ledgerEntry.createMany({
-        data: [
-          {
-            wallet_id: providerWallet.id,
-            direction: LedgerDirection.credit,
-            secs: escrow.secs,
-            ref_type: LedgerRefType.transfer,
-            ref_id: transfer.id,
-          },
-        ],
-      }); 
+      // ledger: credit cho provider
+      await tx.ledgerEntry.create({
+        data: {
+          wallet_id: providerWallet.id,
+          direction: LedgerDirection.credit,
+          secs: amount,
+          ref_type: LedgerRefType.transfer,
+          ref_id: transfer.id,
+        },
+      });
+
+      return {
+        transfer: {
+          id: transfer.id,
+          secs: transfer.secs,
+          completed_at: transfer.completed_at,
+        },
+      };
     });
+
+    // Gửi thông báo sau commit
+    // senderUserId: người đã funding escrow (buyer). Nếu không xác định được, có thể bỏ qua noti OUT.
+    if (senderUserId) {
+      await this.notifications.pushTransferPair({
+        id: result.transfer.id,
+        senderUserId,                // buyer (người chuyển OUT)
+        receiverUserId: providerId,  // provider (người nhận IN)
+        secs: result.transfer.secs,
+        completedAt: result.transfer.completed_at ?? new Date(),
+      });
+    } else {
+      // fallback: tối thiểu vẫn thông báo cho provider nhận IN
+      await this.notifications.pushTransferPair({
+        id: result.transfer.id,
+        senderUserId: providerId,    
+        receiverUserId: providerId,
+        secs: result.transfer.secs,
+        completedAt: result.transfer.completed_at ?? new Date(),
+      });
+    }
+
     return { success: true };
   }
 }
