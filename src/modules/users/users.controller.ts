@@ -24,7 +24,7 @@ export class UsersController {
 
   // Cập nhật hồ sơ của chính mình
   @UseGuards(JwtAuthGuard)
-  @Patch('me')
+  @Patch('me/edit-profile')
   async updateMe(@UserId() userId: string, @Body() dto: UpdateUserDto) {
     return this.usersService.updateUserById(userId, dto);
   }
