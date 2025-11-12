@@ -16,6 +16,7 @@ import { BookingsModule } from './modules/bookings/bookings.module';
 import { QueueModule } from './infra/queue/queue.module';
 import { EscrowsModule } from './modules/escrows/escrows.module';
 import { NotificationsModule } from './modules/notifications/notifications.module';
+import { FollowsModule } from './modules/follows/follows.module';
 
 @Module({
   imports: [
@@ -37,6 +38,7 @@ import { NotificationsModule } from './modules/notifications/notifications.modul
     BookingsModule,
     EscrowsModule,
     NotificationsModule,
+    FollowsModule
   ],
   controllers: [],
   providers: [],
