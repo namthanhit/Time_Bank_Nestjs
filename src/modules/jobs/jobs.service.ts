@@ -209,8 +209,19 @@ export class JobsService {
     ) {
       throw new ForbiddenException('You do not have permission');
     }
+    
+    const transformedJob = {
+      ...job,
+      skills: job.serviceSkills?.map((ss) => ss.skill) ?? [],
+      serviceImages:
+        job.serviceImages?.map((si) => ({
+          id: si.image?.id ?? si.id,
+          url: si.image?.url ?? null,
+        })) ?? [],
+      serviceSkills: undefined,
+    };
 
-    return job;
+    return transformedJob;
   }
 
   async getAllMyJobs(userId: string, pagingInfo: PaginationRequestDto) {
