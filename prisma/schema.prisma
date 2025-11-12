@@ -318,6 +318,8 @@ model Transfer {
 
   fromEscrow EscrowWallet?  @relation("FromEscrow", fields: [from_escrow_id], references: [id], onDelete: SetNull)
   toEscrow   EscrowWallet?  @relation("ToEscrow", fields: [to_escrow_id], references: [id], onDelete: SetNull)
+
+  ledgerEntries LedgerEntry[] @relation("LedgerToTransfer")
 }
 
 model LedgerEntry {
@@ -331,6 +333,8 @@ model LedgerEntry {
   created_at DateTime        @default(now())
 
   wallet Wallet @relation(fields: [wallet_id], references: [id], onDelete: Cascade)
+
+  transfer Transfer? @relation("LedgerToTransfer", fields: [ref_id], references: [id])
 }
 
 model Skill {

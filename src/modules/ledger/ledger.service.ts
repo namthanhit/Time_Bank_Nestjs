@@ -9,7 +9,6 @@ function isDateOnly(s?: string) {
   return !!s && /^\d{4}-\d{2}-\d{2}$/.test(s);
 }
 function startOfDayTzToUtc(dateStr: string) {
-  // build "YYYY-MM-DD 00:00:00" ở TZ rồi convert sang UTC Date
   return fromZonedTime(`${dateStr}T00:00:00`, TZ);
 }
 function plusDays(date: Date, days: number) {
@@ -37,16 +36,14 @@ export class LedgerService {
       where.created_at = {};
       if (q.from) {
         (where.created_at as any).gte = isDateOnly(q.from)
-          ? startOfDayTzToUtc(q.from)                  // >= 00:00 ngày from (theo TZ) -> UTC
-          : new Date(q.from);                           // có giờ -> dùng trực tiếp
+          ? startOfDayTzToUtc(q.from)
+          : new Date(q.from);
       }
       if (q.to) {
         if (isDateOnly(q.to)) {
-          // < 00:00 ngày (to + 1) theo TZ
           const endUtc = startOfDayTzToUtc(q.to);
           (where.created_at as any).lt = plusDays(endUtc, 1);
         } else {
-          // có giờ -> dùng <=
           (where.created_at as any).lte = new Date(q.to);
         }
       }
@@ -59,7 +56,30 @@ export class LedgerService {
       this.prisma.ledgerEntry.findMany({
         where,
         orderBy: { created_at: 'desc' },
-        take, skip,
+        take, 
+        skip,
+        
+        include: {
+          transfer: {
+            include: {
+              fromWallet: {
+                include: {
+                  user: {
+                    select: { full_name: true, phone: true },
+                  },
+                },
+              },
+              toWallet: {
+                include: {
+                  user: {
+                    select: { full_name: true, phone: true },
+                  },
+                },
+              },
+            },
+          },
+        },
+
       }),
       this.prisma.ledgerEntry.count({ where }),
     ]);
