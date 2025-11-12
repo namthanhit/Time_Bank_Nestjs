@@ -31,5 +31,9 @@ export class UpdateUserDto {
 
     @IsString()
     @IsOptional()
+    street?: string;
+
+    @IsString()
+    @IsOptional()
     social_network?: string;
 }
