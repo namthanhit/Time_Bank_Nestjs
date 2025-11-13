@@ -24,6 +24,15 @@ export class OffersController {
     return this.offersService.createOffer(userId, offerDto);
   }
 
+  @Get('status/:jobId')
+  async getStatusOffer(
+    @Param(':jobId') jobId: string,
+    @UserId() userId: string
+  ){
+    return this.offersService.getStatusOffer(jobId, userId)
+  }
+
+
   //xem những đứa ofer vào job của mình
   @Get('me-job/:jobId')
   async getOffersForMyJob(

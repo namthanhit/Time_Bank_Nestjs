@@ -34,13 +34,13 @@ export class UsersController {
   @UseGuards(JwtAuthGuard)
   @Get('me')
   async getMe(@UserId() userId: string) {
-    return this.usersService.getUserDetailById(userId);
+    return this.usersService.getMeDetailById(userId);
   }
 
   @UseGuards(JwtAuthGuard)
   @Get(':id')
-  async getUserById(@Param(":id") userId: string) {
-    return this.usersService.getUserDetailById(userId);
+  async getUserById(@Param(":id") userId: string, @UserId() me: string) {
+    return this.usersService.getUserDetailById(userId, me);
   }
 
   // Cập nhật hồ sơ của chính mình

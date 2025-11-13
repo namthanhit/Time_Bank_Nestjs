@@ -16,7 +16,7 @@ export class UsersService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly regionService: RegionService,
-  ) {}
+  ) { }
 
   async findAll() {
     return this.prisma.user.findMany();
@@ -43,6 +43,37 @@ export class UsersService {
     };
   }
 
+  async getUserDetailById(id: string, me: string) {
+    const user = await this.prisma.user.findFirst({
+      where: { id },
+    });
+    if (!user) throw new Error('User not found');
+    const userDetail = await this.prisma.userDetail.findFirst({
+      where: { user_id: id },
+    });
+
+    let region;
+    if (userDetail?.region_id) {
+      region = await this.regionService.getRegionDetail(userDetail.region_id);
+    }
+
+    let isFollowing = false
+    const exitstingFollow = await this.prisma.follow.findFirst({
+      where: {
+        follower_id: me,
+        followee_id: id
+      }
+    })
+    if (exitstingFollow) isFollowing = true
+
+    return {
+      ...user,
+      userDetail,
+      region,
+      isFollowing
+    };
+  }
+
   async updateUserById(id: string, dto: UpdateUserDto) {
     const user = await this.prisma.user.findUnique({
       where: { id },
@@ -57,7 +88,7 @@ export class UsersService {
       phone,
       birth_date,
       description,
-      address, 
+      address,
       work_address,
       study_address,
       street,
@@ -128,7 +159,7 @@ export class UsersService {
     if (transactionOperations.length > 0) {
       await this.prisma.$transaction(transactionOperations);
     }
-    return { success: true }
+    return { success: true };
   }
 
   async blockUserById(userId: string) {
