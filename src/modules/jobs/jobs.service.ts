@@ -97,6 +97,7 @@ export class JobsService {
     const followingIds = followingList.map((f) => f.followee_id);
 
     const where: Prisma.ServiceWhereInput = {
+      user_id: { not: userId },
       status: JobStatus.OPEN,
       OR: [
         { visibility: Visibility.public },

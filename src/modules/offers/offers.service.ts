@@ -231,10 +231,10 @@ export class OffersService {
     };
   }
 
-  async cancelMyOffer(userId: string, offerId: string) {
-    const offer = await this.prismaService.offer.findUnique({
+  async cancelMyOffer(userId: string, job_id: string) {
+    const offer = await this.prismaService.offer.findFirst({
       where: {
-        id: offerId,
+        service_id: job_id,
         user_id: userId,
       },
     });
