@@ -23,11 +23,11 @@ export class UsersService {
   }
 
   async getUserDetailById(id: string) {
-    const user = await this.prisma.user.findUnique({
+    const user = await this.prisma.user.findFirst({
       where: { id },
     });
     if (!user) throw new Error('User not found');
-    const userDetail = await this.prisma.userDetail.findUnique({
+    const userDetail = await this.prisma.userDetail.findFirst({
       where: { user_id: id },
     });
 
