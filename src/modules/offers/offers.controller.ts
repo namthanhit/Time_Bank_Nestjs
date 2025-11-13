@@ -85,10 +85,10 @@ export class OffersController {
   }
 
   //hủy những offer của mình
-  @Delete('me/:offerId/cancel-offer')
+  @Delete('me/:jobId/cancel-offer')
   async cancelMyOffer(
     @UserId() userId: string,
-    @Param('offerId') offerId: string,
+    @Param('jobId') offerId: string,
   ) {
     return this.offersService.cancelMyOffer(userId, offerId);
   }
