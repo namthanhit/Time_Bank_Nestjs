@@ -39,7 +39,7 @@ export class UsersController {
 
   @UseGuards(JwtAuthGuard)
   @Get(':id')
-  async getUserById(@Param(":id") userId: string, @UserId() me: string) {
+  async getUserById(@Param('id') userId: string, @UserId() me: string) {
     return this.usersService.getUserDetailById(userId, me);
   }
 
