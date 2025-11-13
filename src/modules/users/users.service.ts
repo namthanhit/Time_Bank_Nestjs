@@ -16,18 +16,18 @@ export class UsersService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly regionService: RegionService,
-  ) { }
+  ) {}
 
   async findAll() {
     return this.prisma.user.findMany();
   }
 
-  async getUserDetailById(id: string) {
-    const user = await this.prisma.user.findFirst({
+  async getMeDetailById(id: string) {
+    const user = await this.prisma.user.findUnique({
       where: { id },
     });
     if (!user) throw new Error('User not found');
-    const userDetail = await this.prisma.userDetail.findFirst({
+    const userDetail = await this.prisma.userDetail.findUnique({
       where: { user_id: id },
     });
 
@@ -59,12 +59,12 @@ export class UsersService {
 
     let isFollowing = false
     const exitstingFollow = await this.prisma.follow.findFirst({
-      where: {
+      where:{
         follower_id: me,
         followee_id: id
       }
     })
-    if (exitstingFollow) isFollowing = true
+    if(exitstingFollow) isFollowing = true
 
     return {
       ...user,
