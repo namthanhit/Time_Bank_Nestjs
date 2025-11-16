@@ -229,6 +229,8 @@ export class BookingsService {
       },
     });
 
+    if(!count) return 0
+
     return count;
   }
 }
