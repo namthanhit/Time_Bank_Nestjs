@@ -65,14 +65,27 @@ export class JobsService {
           visibility: createJobDto.visibility,
         },
       });
-
-      const skill = await tx.serviceSkill.createMany({
+      await tx.serviceSkill.createMany({
         data: validatedSkillIds.map((id) => ({
           service_id: job.id,
           skill_id: id,
         })),
       });
-
+      if (createJobDto.imageUrls && createJobDto.imageUrls.length > 0) {
+        for (const url of createJobDto.imageUrls) {
+          const newImage = await tx.image.create({
+            data: {
+              url: url,
+            },
+          });
+          await tx.serviceImage.create({
+            data: {
+              service_id: job.id,
+              image_id: newImage.id,
+            },
+          });
+        }
+      }
       await this.escrowsService.createEscrow(userId, job.id, tx);
       return job;
     });
@@ -84,7 +97,7 @@ export class JobsService {
       `delete-pending-job-${job.id}`,
     );
 
-    return { success: true };
+    return job;
   }
 
   async findJobCommunity(userId: string, pagingInfo: PaginationRequestDto) {

@@ -26,7 +26,7 @@ export class OffersController {
 
   @Get('status/:jobId')
   async getStatusOffer(
-    @Param(':jobId') jobId: string,
+    @Param('jobId') jobId: string,
     @UserId() userId: string
   ){
     return this.offersService.getStatusOffer(jobId, userId)
