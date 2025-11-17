@@ -86,6 +86,7 @@ export class UsersService {
     const {
       email,
       phone,
+      avatar_url,
       birth_date,
       description,
       address,
@@ -95,7 +96,7 @@ export class UsersService {
       social_network,
     } = dto;
 
-    const userData = { email, phone };
+    const userData = { email, phone, avatar_url };
 
     const userDetailData = {
       birth_date,
