@@ -2,19 +2,22 @@ import {
   Injectable,
   UnauthorizedException,
   ForbiddenException,
+  BadRequestException,
 } from '@nestjs/common';
 import { PrismaService } from '../../infra/prisma/prisma.service';
 import * as argon2 from 'argon2';
 import * as jwt from 'jsonwebtoken';
 import { add } from 'date-fns';
 import { FirebaseService } from 'src/infra/firebase/firebase.service';
+import * as bcrypt from 'bcrypt';
 
+const BCRYPT_ROUNDS = Number(process.env.BCRYPT_ROUNDS || 12);
 const ACCESS_TTL = process.env.JWT_ACCESS_TTL || '15m';
 const REFRESH_TTL = process.env.JWT_REFRESH_TTL || '30d';
 const JWT_SECRET = process.env.JWT_SECRET!;
 
 const LOGIN_MAX_ATTEMPTS = Number(process.env.LOGIN_MAX_ATTEMPTS || 5);
-const LOGIN_LOCK_MINUTES = Number(process.env.LOGIN_LOCK_MINUTES || 15);
+const LOGIN_LOCK_MINUTES = Number(process.env.LOGIN_LOCK_MINUTES || 10);
 
 function parseExpiryToDate(ttl: string): Date {
   // Hỗ trợ s/m/h/d, mặc định 15 phút
@@ -380,6 +383,51 @@ export class AuthService {
     // đồng bộ Firebase: revoke tất cả refresh tokens của UID này
     await this.firebase.revokeUserTokens(userId);
 
+    return { success: true };
+  }
+
+  async changePassword(userId: string, current_password: string, new_password: string) {
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+      include: { auth: true },
+    });
+    if (!user?.auth?.password) throw new UnauthorizedException('Unauthorized');
+
+    const ok = await argon2.verify(user.auth.password, current_password);
+    if (!ok) throw new UnauthorizedException('Mật khẩu hiện tại không đúng');
+
+    const newHash = await argon2.hash(new_password);
+    await this.prisma.auth.update({
+      where: { user_id: userId },
+      data: {
+        password: newHash,
+        password_changed_at: new Date(),
+      },
+    });
+    return { success: true };
+  }
+
+  async changePin(userId: string, new_pin: string, current_pin?: string) {
+    const auth = await this.prisma.auth.findUnique({ where: { user_id: userId } });
+    if (!auth) throw new UnauthorizedException('Unauthorized');
+    if (auth.pin) {
+      if (!current_pin) throw new BadRequestException('Thiếu current_pin');
+      const ok = await bcrypt.compare(current_pin, auth.pin);
+      if (!ok) throw new UnauthorizedException('PIN hiện tại không đúng');
+    }
+
+    const salt = await bcrypt.genSalt(BCRYPT_ROUNDS);
+    const newHash = await bcrypt.hash(new_pin, salt);
+
+    await this.prisma.auth.update({
+      where: { user_id: userId },
+      data: {
+        pin: newHash,
+        pin_set_at: new Date(),
+        pin_failed_attempts: 0,
+        pin_locked_until: null,
+      },
+    });
     return { success: true };
   }
 }
