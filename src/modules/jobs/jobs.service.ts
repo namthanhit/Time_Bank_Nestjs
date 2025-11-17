@@ -1,9 +1,10 @@
 import {
+  BadRequestException,
   ForbiddenException,
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import { CreateJobDto } from './typings/job.dto';
+import { CreateJobDto, UpdateJobDto } from './typings/job.dto';
 import { PrismaService } from 'src/infra/prisma/prisma.service';
 import { JobStatus, JobVisibility } from './typings/job.enum';
 import { PaginationRequestDto } from 'src/typings/dtos/pagination.dto';
@@ -12,10 +13,11 @@ import {
   getQueryParamsForAdmin,
 } from 'src/utils/get-query-params';
 import { Prisma, Visibility } from '@prisma/client';
-import { RedisService } from 'src/infra/redis/redis.service';
 import { QueueService } from 'src/infra/queue/queue.service';
 import { EscrowsService } from '../escrows/escrows.service';
 import { TWENTY_FOUR_HOURS_MS } from 'src/common/constants';
+import { TransferService } from '../transfer/transfer.service';
+import { TransferToEscrowDto } from '../transfer/dtos/create-transfer.dto';
 
 @Injectable()
 export class JobsService {
@@ -23,32 +25,63 @@ export class JobsService {
     private readonly prismaService: PrismaService,
     private readonly escrowsService: EscrowsService,
     private readonly queueService: QueueService,
+    private readonly transferService: TransferService,
   ) {}
 
-  private async validateDto(createJobDto: CreateJobDto) {
-    const existingSkills = await this.prismaService.skill.findMany({
-      where: { id: { in: createJobDto.skills } },
-    });
+  private async validateDto(dto: Partial<CreateJobDto>) {
+    const result: {
+      validatedSkillIds?: string[];
+      preferred_start_time?: Date;
+    } = {};
 
-    const validatedSkillIds = existingSkills.map((s) => s.id);
-    const invalidSkillIds = createJobDto.skills.filter(
-      (id) => !validatedSkillIds.includes(id),
-    );
-    if (invalidSkillIds.length > 0)
-      throw new NotFoundException(
-        `Invalid skill IDs: ${invalidSkillIds.join(', ')}`,
+    if (dto.skills) {
+      const existingSkills = await this.prismaService.skill.findMany({
+        where: { id: { in: dto.skills } },
+      });
+
+      const validatedSkillIds = existingSkills.map((s) => s.id);
+      const invalidSkillIds = dto.skills.filter(
+        (id) => !validatedSkillIds.includes(id),
       );
 
-    const preferred_start_time = new Date(createJobDto.preferred_start_time);
-    if (preferred_start_time < new Date())
-      throw new NotFoundException('Preferred start time must be in the future');
+      if (invalidSkillIds.length > 0) {
+        throw new NotFoundException(
+          `Invalid skill IDs: ${invalidSkillIds.join(', ')}`,
+        );
+      }
 
-    return { validatedSkillIds, preferred_start_time };
+      result.validatedSkillIds = validatedSkillIds;
+    }
+
+    if (dto.preferred_start_time) {
+      const preferred_start_time = new Date(dto.preferred_start_time);
+      if (isNaN(preferred_start_time.getTime())) {
+        throw new NotFoundException('Invalid preferred_start_time format');
+      }
+
+      if (preferred_start_time < new Date()) {
+        throw new NotFoundException(
+          'Preferred start time must be in the future',
+        );
+      }
+
+      result.preferred_start_time = preferred_start_time;
+    }
+
+    return result;
   }
 
   async createJob(userId: string, createJobDto: CreateJobDto) {
     const { validatedSkillIds, preferred_start_time } =
       await this.validateDto(createJobDto);
+
+    if (!validatedSkillIds || validatedSkillIds.length === 0) {
+      throw new BadRequestException('Skills are required');
+    }
+
+    if (!preferred_start_time) {
+      throw new BadRequestException('Preferred start time is required');
+    }
 
     const job = await this.prismaService.$transaction(async (tx) => {
       const job = await tx.service.create({
@@ -240,10 +273,26 @@ export class JobsService {
 
   async getAllMyJobs(userId: string, pagingInfo: PaginationRequestDto) {
     const { queryParams, metadata } = getQueryParams(pagingInfo);
+
+    const ALLOWED_STATUSES: JobStatus[] = [
+      JobStatus.OPEN,
+      JobStatus.MATCHED,
+      JobStatus.COMPLETED,
+      JobStatus.CANCELLED,
+      JobStatus.EXPIRED,
+    ];
+
     const where: Prisma.ServiceWhereInput = { user_id: userId };
 
-    if (pagingInfo.type?.length)
-      where.status = { in: pagingInfo.type as JobStatus[] };
+    if (pagingInfo.type?.length) {
+      where.status = {
+        in: (pagingInfo.type as JobStatus[]).filter((s) =>
+          ALLOWED_STATUSES.includes(s),
+        ),
+      };
+    } else {
+      where.status = { in: ALLOWED_STATUSES };
+    }
 
     if (pagingInfo.search) {
       const keyword = pagingInfo.search.trim();
@@ -403,41 +452,149 @@ export class JobsService {
     return transformedJob;
   }
 
-  async updateMyJob(userId: string, jobId: string, updateJobDto: CreateJobDto) {
-    const { validatedSkillIds, preferred_start_time } =
-      await this.validateDto(updateJobDto);
+  async checkUpdateJob(userId: string, jobId: string, dto: UpdateJobDto) {
+    await this.validateDto(dto);
+
     const job = await this.prismaService.service.findUnique({
       where: { id: jobId, user_id: userId },
     });
+    if (!job) throw new NotFoundException('Job not found');
 
-    if (!job) throw new NotFoundException(`Job with ID ${jobId} not found`);
+    const oldRequired = job.time * job.slot;
+    const newTime = dto.time ?? job.time;
+    const newSlot = dto.slot ?? job.slot;
+    const newRequired = newTime * newSlot;
 
-    await this.prismaService.$transaction(async (tx) => {
-      await tx.service.update({
-        where: { id: jobId, user_id: userId },
-        data: {
-          title: updateJobDto.title,
-          description: updateJobDto.description,
-          region_code: updateJobDto.region_code,
-          place: updateJobDto.place,
-          preferred_start: preferred_start_time,
-          time: updateJobDto.time,
-          slot: updateJobDto.slot,
-          visibility: updateJobDto.visibility,
-        },
+    const delta = newRequired - oldRequired;
+
+    if (delta == 0) {
+      await this.updateMyJob(userId, jobId, dto);
+      return { success: 0 };
+    } else if (delta < 0) {
+      await this.prismaService.$transaction(async (tx) => {
+        await this.updateMyJob(userId, jobId, dto, tx);
+
+        const escrow = await tx.escrowWallet.findUnique({
+          where: { job_id: jobId },
+        });
+        if (!escrow) throw new NotFoundException('Escrow not found');
+        await this.transferService.transferFromEscrowToProvider(
+          escrow.id,
+          userId,
+          Math.abs(delta),
+          tx,
+        );
       });
+      return { success: 2 };
+    }
 
-      await tx.serviceSkill.deleteMany({ where: { service_id: jobId } });
+    return {
+      secs: delta,
+      updateJobDto: dto,
+      success: 1,
+    };
+  }
 
-      await tx.serviceSkill.createMany({
-        data: validatedSkillIds.map((id) => ({
-          service_id: jobId,
-          skill_id: id,
-        })),
-      });
+  async updateMyJob(
+    userId: string,
+    jobId: string,
+    dto: UpdateJobDto,
+    tx?: Prisma.TransactionClient,
+  ) {
+    const validatedSkillIds = dto.skills;
+
+    const execute = async (trx: Prisma.TransactionClient) => {
+      const updateData = this.buildUpdateData(dto);
+
+      if (Object.keys(updateData).length > 0) {
+        await trx.service.update({
+          where: { id: jobId, user_id: userId },
+          data: updateData,
+        });
+      }
+      if (validatedSkillIds) {
+        await trx.serviceSkill.deleteMany({ where: { service_id: jobId } });
+
+        await trx.serviceSkill.createMany({
+          data: validatedSkillIds.map((skill) => ({
+            service_id: jobId,
+            skill_id: skill,
+          })),
+        });
+      }
+
+      if (dto.imageUrls && dto.imageUrls.length > 0) {
+        await trx.serviceImage.deleteMany({ where: { service_id: jobId } });
+
+        for (const url of dto.imageUrls) {
+          const newImage = await trx.image.create({
+            data: {
+              url: url,
+            },
+          });
+          await trx.serviceImage.create({
+            data: {
+              service_id: jobId,
+              image_id: newImage.id,
+            },
+          });
+        }
+      } else if (dto.imageUrls !== undefined){
+        await trx.serviceImage.deleteMany({ where: { service_id: jobId } });
+      }
+    };
+
+    if (tx) {
+      await execute(tx);
+      return { data: true };
+    }
+
+    await this.prismaService.$transaction(async (trx) => {
+      await execute(trx);
     });
 
     return { data: true };
+  }
+
+  private buildUpdateData(dto: UpdateJobDto) {
+    const map: Record<string, any> = {
+      title: dto.title,
+      description: dto.description,
+      region_code: dto.region_code,
+      place: dto.place,
+      preferred_start: dto.preferred_start_time
+        ? new Date(dto.preferred_start_time)
+        : undefined,
+      time: dto.time,
+      slot: dto.slot,
+      visibility: dto.visibility,
+    };
+
+    return Object.fromEntries(
+      Object.entries(map).filter(([_, v]) => v !== undefined),
+    );
+  }
+
+  async confirmUpdateMyJobById(
+    userId: string,
+    updateJobDto: UpdateJobDto,
+    transferToEscrowDto: TransferToEscrowDto,
+  ) {
+    await this.prismaService.$transaction(async (tx) => {
+      await this.updateMyJob(
+        userId,
+        transferToEscrowDto.jobId,
+        updateJobDto,
+        tx,
+      );
+      await this.transferService.transferToEscrow(
+        userId,
+        transferToEscrowDto,
+        tx,
+      );
+    });
+
+    return { success: true };
   }
 
   async cancelJob(userId: string, jobId: string) {

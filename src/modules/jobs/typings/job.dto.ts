@@ -1,13 +1,15 @@
 import {
   IsArray,
-  IsDateString,
   IsNotEmpty,
   IsNumber,
   IsString,
   IsOptional,
   IsUrl,
+  ValidateNested,
 } from 'class-validator';
 import { JobVisibility } from './job.enum';
+import { Type } from 'class-transformer';
+import { TransferToEscrowDto } from 'src/modules/transfer/dtos/create-transfer.dto';
 
 export class CreateJobDto {
   @IsString()
@@ -56,29 +58,55 @@ export class CreateJobDto {
 
 export class UpdateJobDto {
   @IsString()
+  @IsOptional()
   title?: string;
 
   @IsString()
+  @IsOptional()
   description?: string;
 
   @IsString()
+  @IsOptional()
   region_code?: string;
 
   @IsString()
+  @IsOptional()
   place?: string;
 
-  @IsDateString()
+  @IsString()
+  @IsOptional()
   preferred_start_time?: string;
 
   @IsNumber()
-  time?: string;
+  @IsOptional()
+  time?: number;
 
   @IsNumber()
+  @IsOptional()
   slot?: number;
 
   @IsString()
+  @IsOptional()
   visibility?: JobVisibility;
 
-  @IsString()
-  status?: string;
+  @IsArray()
+  @IsString({ each: true })
+  @IsOptional()
+  skills?: string[];
+
+  @IsArray()
+  @IsString({ each: true })
+  //@IsUrl({}, { each: true, message: 'URL không hợp lệ' })
+  @IsOptional()
+  imageUrls?: string[];
+}
+
+export class ConfirmUpdateJobDto {
+  @ValidateNested()
+  @Type(() => UpdateJobDto)
+  updateJobDto: UpdateJobDto;
+
+  @ValidateNested()
+  @Type(() => TransferToEscrowDto)
+  transferToEscrowDto: TransferToEscrowDto;
 }

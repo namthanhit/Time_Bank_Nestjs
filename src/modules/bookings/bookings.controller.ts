@@ -33,7 +33,7 @@ export class BookingsController {
     return this.bookingService.getMyListBooked(userId)
   }
 
-  @Get("count-booked")
+  @Get(":jobId/count-booked")
   async getCountBooked(
     @UserId() userId: string,
     @Param("jobId") jobId: string
