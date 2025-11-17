@@ -9,7 +9,7 @@ import * as jwt from 'jsonwebtoken';
 import { add } from 'date-fns';
 import { FirebaseService } from 'src/infra/firebase/firebase.service';
 
-const ACCESS_TTL = process.env.JWT_ACCESS_TTL || '15m';
+const ACCESS_TTL = process.env.JWT_ACCESS_TTL ? `${process.env.JWT_ACCESS_TTL}s` : '15m';
 const REFRESH_TTL = process.env.JWT_REFRESH_TTL || '30d';
 const JWT_SECRET = process.env.JWT_SECRET!;
 

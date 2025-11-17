@@ -10,6 +10,8 @@ import e from 'express';
 import { Prisma, User, UserDetail, UserStatus } from '@prisma/client';
 import { console } from 'inspector';
 import { RegionService } from '../region/region.service';
+import { PaginationRequestDto } from 'src/typings/dtos/pagination.dto';
+import { getQueryParams } from 'src/utils/get-query-params';
 
 @Injectable()
 export class UsersService {
@@ -18,8 +20,44 @@ export class UsersService {
     private readonly regionService: RegionService,
   ) {}
 
-  async findAll() {
-    return this.prisma.user.findMany();
+  async findAll(userId: string, pagingInfo: PaginationRequestDto) {
+    const { queryParams, metadata } = getQueryParams(pagingInfo);
+    
+    // Build where clause for search and filters
+    const where: Prisma.UserWhereInput = {};
+    
+    // Search functionality - search by full_name, phone, or id
+    if (pagingInfo.search) {
+      where.OR = [
+        { full_name: { contains: pagingInfo.search } },
+        { phone: { contains: pagingInfo.search } },
+        { id: { contains: pagingInfo.search } },
+      ];
+    }
+    
+    // Status filter
+    if (pagingInfo.status) {
+      where.status = pagingInfo.status;
+    }
+    
+    const [users, total] = await Promise.all([
+      this.prisma.user.findMany({
+        where,
+        skip: queryParams.paging.skip,
+        take: queryParams.paging.take,
+        orderBy: queryParams.orderBy || { created_at: 'desc' },
+      }),
+      this.prisma.user.count({ where }),
+    ]);
+
+    return {
+      data: users,
+      metadata: {
+        ...metadata,
+        total,
+        totalPages: Math.ceil(total / metadata.pageSize),
+      },
+    };
   }
 
   async getMeDetailById(id: string) {

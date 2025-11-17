@@ -45,6 +45,11 @@ export class PaginationRequestDto {
   @IsOptional()
   search?: string; 
 
+  @ApiPropertyOptional({ enum: ['active', 'suspended', 'banned'] })
+  @IsEnum(['active', 'suspended', 'banned'])
+  @IsOptional()
+  status?: 'active' | 'suspended' | 'banned';
+
   @ApiPropertyOptional({ type: [String] })
   @IsOptional()
   @Transform(({ value }) => {

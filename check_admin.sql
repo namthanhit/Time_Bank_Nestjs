@@ -1,0 +1,1 @@
+SELECT id, full_name, email, status FROM User WHERE id = 'admin01';
