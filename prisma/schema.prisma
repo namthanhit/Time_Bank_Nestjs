@@ -13,6 +13,18 @@ enum WalletStatus {
   closed
 }
 
+enum ReportTarget {
+  user
+  service
+}
+
+enum ReportStatus {
+  pending
+  reviewing
+  resolved
+  rejected
+}
+
 enum EscrowWalletStatus {
   released
   pending
@@ -153,6 +165,8 @@ model User {
   raterRatings Rating[] @relation("RaterRatings")
   notifications Notification[]
   fcm_tokens    FcmToken[]
+
+  reports Report[] @relation("ReportsByUser")
 }
 
 model UserDetail {
@@ -516,4 +530,21 @@ model FcmToken {
 
   @@index([user_id, is_active])
   @@unique([user_id, token])
+}
+
+model Report {
+  id            String        @id @default(cuid())
+  reporter_id   String
+  target_type   ReportTarget
+  target_id     String
+  reason        String        @db.VarChar(255)
+  description   String?       @db.Text
+  attachments   Json?
+  status        ReportStatus  @default(pending)
+  admin_note    String?       @db.VarChar(500)
+
+  created_at    DateTime      @default(now())
+  updated_at    DateTime      @default(now()) @updatedAt
+
+  reporter      User          @relation("ReportsByUser", fields: [reporter_id], references: [id])
 }

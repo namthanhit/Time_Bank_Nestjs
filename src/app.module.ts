@@ -18,6 +18,7 @@ import { EscrowsModule } from './modules/escrows/escrows.module';
 import { NotificationsModule } from './modules/notifications/notifications.module';
 import { FollowsModule } from './modules/follows/follows.module';
 import { ForgotPasswordModule } from './modules/forgot-password/forgot-password.module';
+import { ReportsModule } from './modules/reports/reports.module';
 
 @Module({
   imports: [
@@ -41,6 +42,7 @@ import { ForgotPasswordModule } from './modules/forgot-password/forgot-password.
     NotificationsModule,
     FollowsModule,
     ForgotPasswordModule,
+    ReportsModule
   ],
   controllers: [],
   providers: [],

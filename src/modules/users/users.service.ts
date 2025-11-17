@@ -3,13 +3,12 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import { CreateUserDto } from './typings/create-user.dto';
 import { UpdateUserDto } from './typings/user.update.dto';
 import { PrismaService } from 'src/infra/prisma/prisma.service';
-import e from 'express';
 import { Prisma, User, UserDetail, UserStatus } from '@prisma/client';
-import { console } from 'inspector';
 import { RegionService } from '../region/region.service';
+import { PaginationRequestDto } from './typings/pagination.dto';
+import { getQueryParamsForAdmin } from 'src/utils/get-query-params';
 
 @Injectable()
 export class UsersService {
@@ -18,8 +17,45 @@ export class UsersService {
     private readonly regionService: RegionService,
   ) {}
 
-  async findAll() {
-    return this.prisma.user.findMany();
+  async findAll(userId: string, pagingInfo: PaginationRequestDto) {
+    const { queryParams, metadata } = getQueryParamsForAdmin(pagingInfo);
+    const where: Prisma.UserWhereInput = {
+      NOT: {
+        id: 'admin01',
+      },
+    };
+
+    if (pagingInfo.search) {
+      where.OR = [
+        { full_name: { contains: pagingInfo.search } },
+        { phone: { contains: pagingInfo.search } },
+        { id: { contains: pagingInfo.search } },
+      ];
+    }
+
+    // Status filter
+    if (pagingInfo.status) {
+      where.status = pagingInfo.status;
+    }
+
+    const [users, total] = await Promise.all([
+      this.prisma.user.findMany({
+        where,
+        skip: queryParams.paging.skip,
+        take: queryParams.paging.take,
+        orderBy: queryParams.orderBy || { created_at: 'desc' },
+      }),
+      this.prisma.user.count({ where }),
+    ]);
+
+    return {
+      data: users,
+      metadata: {
+        ...metadata,
+        total,
+        totalPages: Math.ceil(total / metadata.pageSize),
+      },
+    };
   }
 
   async getMeDetailById(id: string) {
@@ -57,20 +93,20 @@ export class UsersService {
       region = await this.regionService.getRegionDetail(userDetail.region_id);
     }
 
-    let isFollowing = false
+    let isFollowing = false;
     const exitstingFollow = await this.prisma.follow.findFirst({
-      where:{
+      where: {
         follower_id: me,
-        followee_id: id
-      }
-    })
-    if(exitstingFollow) isFollowing = true
+        followee_id: id,
+      },
+    });
+    if (exitstingFollow) isFollowing = true;
 
     return {
       ...user,
       userDetail,
       region,
-      isFollowing
+      isFollowing,
     };
   }
 

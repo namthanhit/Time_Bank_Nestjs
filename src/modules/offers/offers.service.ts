@@ -241,13 +241,10 @@ export class OffersService {
     if (!offer) throw new NotFoundException('Not found offer of you');
 
     if (offer.status === OfferStatus.pending) {
-      await this.prismaService.offer.update({
+      await this.prismaService.offer.delete({
         where: {
           id: offer.id,
-        },
-        data: {
-          status: OfferStatus.cancelled,
-        },
+        }
       });
 
       return {
