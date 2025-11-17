@@ -16,6 +16,9 @@ import { BookingsModule } from './modules/bookings/bookings.module';
 import { QueueModule } from './infra/queue/queue.module';
 import { EscrowsModule } from './modules/escrows/escrows.module';
 import { RatingsModule } from './modules/ratings/ratings.module';
+import { NotificationsModule } from './modules/notifications/notifications.module';
+import { FollowsModule } from './modules/follows/follows.module';
+import { ForgotPasswordModule } from './modules/forgot-password/forgot-password.module';
 
 @Module({
   imports: [
@@ -37,6 +40,9 @@ import { RatingsModule } from './modules/ratings/ratings.module';
     BookingsModule,
     EscrowsModule,
     RatingsModule,
+    NotificationsModule,
+    FollowsModule,
+    ForgotPasswordModule,
   ],
   controllers: [],
   providers: [],

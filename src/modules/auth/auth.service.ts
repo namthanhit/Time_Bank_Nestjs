@@ -1,16 +1,23 @@
-import { Injectable, UnauthorizedException, ForbiddenException } from '@nestjs/common';
+import {
+  Injectable,
+  UnauthorizedException,
+  ForbiddenException,
+  BadRequestException,
+} from '@nestjs/common';
 import { PrismaService } from '../../infra/prisma/prisma.service';
 import * as argon2 from 'argon2';
 import * as jwt from 'jsonwebtoken';
 import { add } from 'date-fns';
 import { FirebaseService } from 'src/infra/firebase/firebase.service';
+import * as bcrypt from 'bcrypt';
 
+const BCRYPT_ROUNDS = Number(process.env.BCRYPT_ROUNDS || 12);
 const ACCESS_TTL = process.env.JWT_ACCESS_TTL || '15m';
 const REFRESH_TTL = process.env.JWT_REFRESH_TTL || '30d';
 const JWT_SECRET = process.env.JWT_SECRET!;
 
 const LOGIN_MAX_ATTEMPTS = Number(process.env.LOGIN_MAX_ATTEMPTS || 5);
-const LOGIN_LOCK_MINUTES = Number(process.env.LOGIN_LOCK_MINUTES || 15);
+const LOGIN_LOCK_MINUTES = Number(process.env.LOGIN_LOCK_MINUTES || 10);
 
 function parseExpiryToDate(ttl: string): Date {
   // Hỗ trợ s/m/h/d, mặc định 15 phút
@@ -20,11 +27,16 @@ function parseExpiryToDate(ttl: string): Date {
   const n = Number(m[1]);
   const unit = m[2].toLowerCase();
   switch (unit) {
-    case 's': return add(now, { seconds: n });
-    case 'm': return add(now, { minutes: n });
-    case 'h': return add(now, { hours: n });
-    case 'd': return add(now, { days: n });
-    default:  return add(now, { minutes: 15 });
+    case 's':
+      return add(now, { seconds: n });
+    case 'm':
+      return add(now, { minutes: n });
+    case 'h':
+      return add(now, { hours: n });
+    case 'd':
+      return add(now, { days: n });
+    default:
+      return add(now, { minutes: 15 });
   }
 }
 
@@ -39,12 +51,16 @@ export class AuthService {
 
   private signAccessToken(user: { id: string; phone: string }) {
     const payload = { sub: user.id, phone: user.phone };
-    return jwt.sign(payload, JWT_SECRET, { expiresIn: ACCESS_TTL } as jwt.SignOptions);
+    return jwt.sign(payload, JWT_SECRET, {
+      expiresIn: ACCESS_TTL,
+    } as jwt.SignOptions);
   }
 
   private signRefreshToken(user: { id: string; phone: string }) {
     const payload = { sub: user.id, phone: user.phone, typ: 'refresh' };
-    return jwt.sign(payload, JWT_SECRET, { expiresIn: REFRESH_TTL } as jwt.SignOptions);
+    return jwt.sign(payload, JWT_SECRET, {
+      expiresIn: REFRESH_TTL,
+    } as jwt.SignOptions);
   }
 
   private maskDeviceInfo(raw?: string) {
@@ -60,7 +76,12 @@ export class AuthService {
 
   // ------------------- public APIs -------------------
 
-  async login(opts: { phone: string; password: string; ip?: string; deviceInfo?: string }) {
+  async login(opts: {
+    phone: string;
+    password: string;
+    ip?: string;
+    deviceInfo?: string;
+  }) {
     const user = await this.prisma.user.findUnique({
       where: { phone: opts.phone },
       include: { auth: true },
@@ -77,7 +98,9 @@ export class AuthService {
 
     // khóa tạm thời
     if (user.auth.locked_until && user.auth.locked_until > new Date()) {
-      throw new ForbiddenException('Account temporarily locked. Try again later.');
+      throw new ForbiddenException(
+        'Account temporarily locked. Try again later.',
+      );
     }
 
     // verify password
@@ -124,10 +147,18 @@ export class AuthService {
     });
 
     // cấp Firebase custom token cho client đăng nhập Firebase
-    const firebase_token = await this.issueFirebaseToken({ id: user.id, phone: user.phone });
+    const firebase_token = await this.issueFirebaseToken({
+      id: user.id,
+      phone: user.phone,
+    });
 
     return {
-      user: { id: user.id, phone: user.phone, full_name: user.full_name, status: user.status },
+      user: {
+        id: user.id,
+        phone: user.phone,
+        full_name: user.full_name,
+        status: user.status,
+      },
       access_token,
       refresh_token,
       expires_in: ACCESS_TTL,
@@ -135,7 +166,107 @@ export class AuthService {
     };
   }
 
-  async refresh(opts: { refresh_token: string; ip?: string; deviceInfo?: string }) {
+  async loginAdmin(opts: {
+    fullname: string;
+    password: string;
+    ip?: string;
+    deviceInfo?: string;
+  }) {
+    const user = await this.prisma.user.findFirst({
+      where: { full_name: opts.fullname },
+      include: { auth: true },
+    });
+
+    if (!user || !user.auth || !user.auth.password) {
+      throw new UnauthorizedException('Invalid credentials');
+    }
+
+    // chặn theo status
+    if (['suspended', 'banned'].includes(user.status)) {
+      throw new ForbiddenException('Account is not allowed to sign in');
+    }
+
+    // khóa tạm thời
+    if (user.auth.locked_until && user.auth.locked_until > new Date()) {
+      throw new ForbiddenException(
+        'Account temporarily locked. Try again later.',
+      );
+    }
+
+    // verify password
+    const pwOk = await argon2.verify(user.auth.password, opts.password);
+    if (!pwOk) {
+      const attempts = (user.auth.failed_attempts || 0) + 1;
+      const update: any = { failed_attempts: attempts };
+
+      if (attempts >= LOGIN_MAX_ATTEMPTS) {
+        const locked = add(new Date(), { minutes: LOGIN_LOCK_MINUTES });
+        update.locked_until = locked;
+        update.failed_attempts = 0; // reset sau khi khóa
+      }
+
+      await this.prisma.auth.update({
+        where: { user_id: user.id },
+        data: update,
+      });
+      throw new UnauthorizedException('Invalid credentials');
+    }
+
+    // reset bộ đếm khi đăng nhập thành công
+    await this.prisma.auth.update({
+      where: { user_id: user.id },
+      data: { failed_attempts: 0, locked_until: null },
+    });
+
+    // cấp token hệ thống (phone có thể null cho admin)
+    const access_token = this.signAccessToken({
+      id: user.id,
+      phone: (user.phone as unknown as string) || '',
+    });
+    const refresh_token = this.signRefreshToken({
+      id: user.id,
+      phone: (user.phone as unknown as string) || '',
+    });
+
+    // lưu refresh token (hash)
+    const token_hash = await argon2.hash(refresh_token);
+    const expires_at = parseExpiryToDate(REFRESH_TTL);
+
+    await this.prisma.refreshToken.create({
+      data: {
+        user_id: user.id,
+        token_hash,
+        device_info: this.maskDeviceInfo(opts.deviceInfo),
+        ip: opts.ip,
+        expires_at,
+      },
+    });
+
+    // cấp Firebase custom token (tuỳ nếu cần đồng bộ)
+    const firebase_token = await this.issueFirebaseToken({
+      id: user.id,
+      phone: user.phone || '',
+    });
+
+    return {
+      user: {
+        id: user.id,
+        full_name: user.full_name,
+        phone: user.phone ?? null,
+        status: user.status,
+      },
+      access_token,
+      refresh_token,
+      expires_in: ACCESS_TTL,
+      firebase_token,
+    };
+  }
+
+  async refresh(opts: {
+    refresh_token: string;
+    ip?: string;
+    deviceInfo?: string;
+  }) {
     // xác thực chữ ký JWT trước
     let payload: any;
     try {
@@ -167,39 +298,51 @@ export class AuthService {
         break;
       }
     }
-    if (!matchedId) throw new UnauthorizedException('Refresh token not found or revoked');
+    if (!matchedId)
+      throw new UnauthorizedException('Refresh token not found or revoked');
 
     // rotate: revoke cái cũ, tạo cái mới
-    const { access_token, refresh_token } = await this.prisma.$transaction(async (tx) => {
-      await tx.refreshToken.update({
-        where: { id: matchedId! },
-        data: { revoked_at: new Date() },
-      });
+    const { access_token, refresh_token } = await this.prisma.$transaction(
+      async (tx) => {
+        await tx.refreshToken.update({
+          where: { id: matchedId! },
+          data: { revoked_at: new Date() },
+        });
 
-      const user = await tx.user.findUnique({ where: { id: userId } });
-      if (!user) throw new UnauthorizedException('User not found');
+        const user = await tx.user.findUnique({ where: { id: userId } });
+        if (!user) throw new UnauthorizedException('User not found');
 
-      const new_access = this.signAccessToken({ id: user.id, phone: user.phone });
-      const new_refresh = this.signRefreshToken({ id: user.id, phone: user.phone });
+        const new_access = this.signAccessToken({
+          id: user.id,
+          phone: user.phone,
+        });
+        const new_refresh = this.signRefreshToken({
+          id: user.id,
+          phone: user.phone,
+        });
 
-      const token_hash = await argon2.hash(new_refresh);
-      const expires_at = parseExpiryToDate(REFRESH_TTL);
+        const token_hash = await argon2.hash(new_refresh);
+        const expires_at = parseExpiryToDate(REFRESH_TTL);
 
-      await tx.refreshToken.create({
-        data: {
-          user_id: user.id,
-          token_hash,
-          device_info: this.maskDeviceInfo(opts.deviceInfo),
-          ip: opts.ip,
-          expires_at,
-        },
-      });
+        await tx.refreshToken.create({
+          data: {
+            user_id: user.id,
+            token_hash,
+            device_info: this.maskDeviceInfo(opts.deviceInfo),
+            ip: opts.ip,
+            expires_at,
+          },
+        });
 
-      return { access_token: new_access, refresh_token: new_refresh };
-    });
+        return { access_token: new_access, refresh_token: new_refresh };
+      },
+    );
 
     // cấp lại firebase token (optional nhưng nên đồng bộ)
-    const firebase_token = await this.issueFirebaseToken({ id: userId, phone: payload.phone });
+    const firebase_token = await this.issueFirebaseToken({
+      id: userId,
+      phone: payload.phone,
+    });
 
     return {
       access_token,
@@ -240,6 +383,51 @@ export class AuthService {
     // đồng bộ Firebase: revoke tất cả refresh tokens của UID này
     await this.firebase.revokeUserTokens(userId);
 
+    return { success: true };
+  }
+
+  async changePassword(userId: string, current_password: string, new_password: string) {
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+      include: { auth: true },
+    });
+    if (!user?.auth?.password) throw new UnauthorizedException('Unauthorized');
+
+    const ok = await argon2.verify(user.auth.password, current_password);
+    if (!ok) throw new UnauthorizedException('Mật khẩu hiện tại không đúng');
+
+    const newHash = await argon2.hash(new_password);
+    await this.prisma.auth.update({
+      where: { user_id: userId },
+      data: {
+        password: newHash,
+        password_changed_at: new Date(),
+      },
+    });
+    return { success: true };
+  }
+
+  async changePin(userId: string, new_pin: string, current_pin?: string) {
+    const auth = await this.prisma.auth.findUnique({ where: { user_id: userId } });
+    if (!auth) throw new UnauthorizedException('Unauthorized');
+    if (auth.pin) {
+      if (!current_pin) throw new BadRequestException('Thiếu current_pin');
+      const ok = await bcrypt.compare(current_pin, auth.pin);
+      if (!ok) throw new UnauthorizedException('PIN hiện tại không đúng');
+    }
+
+    const salt = await bcrypt.genSalt(BCRYPT_ROUNDS);
+    const newHash = await bcrypt.hash(new_pin, salt);
+
+    await this.prisma.auth.update({
+      where: { user_id: userId },
+      data: {
+        pin: newHash,
+        pin_set_at: new Date(),
+        pin_failed_attempts: 0,
+        pin_locked_until: null,
+      },
+    });
     return { success: true };
   }
 }

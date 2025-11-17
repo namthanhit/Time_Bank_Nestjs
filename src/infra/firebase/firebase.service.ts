@@ -1,5 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
 import * as admin from 'firebase-admin';
+import { getMessaging, Messaging } from 'firebase-admin/messaging';
 
 @Injectable()
 export class FirebaseService {
@@ -22,6 +23,10 @@ export class FirebaseService {
     } else {
       this._app = admin.app();
     }
+  }
+
+  messaging(): Messaging {
+    return getMessaging(this.app);
   }
 
   // ====== Core getters ======

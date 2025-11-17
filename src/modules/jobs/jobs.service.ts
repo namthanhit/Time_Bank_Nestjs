@@ -7,7 +7,10 @@ import { CreateJobDto } from './typings/job.dto';
 import { PrismaService } from 'src/infra/prisma/prisma.service';
 import { JobStatus, JobVisibility } from './typings/job.enum';
 import { PaginationRequestDto } from 'src/typings/dtos/pagination.dto';
-import { getQueryParams } from 'src/utils/get-query-params';
+import {
+  getQueryParams,
+  getQueryParamsForAdmin,
+} from 'src/utils/get-query-params';
 import { Prisma, Visibility } from '@prisma/client';
 import { RedisService } from 'src/infra/redis/redis.service';
 import { QueueService } from 'src/infra/queue/queue.service';
@@ -18,7 +21,6 @@ import { TWENTY_FOUR_HOURS_MS } from 'src/common/constants';
 export class JobsService {
   constructor(
     private readonly prismaService: PrismaService,
-    private readonly redisService: RedisService,
     private readonly escrowsService: EscrowsService,
     private readonly queueService: QueueService,
   ) {}
@@ -63,14 +65,27 @@ export class JobsService {
           visibility: createJobDto.visibility,
         },
       });
-
-      const skill = await tx.serviceSkill.createMany({
+      await tx.serviceSkill.createMany({
         data: validatedSkillIds.map((id) => ({
           service_id: job.id,
           skill_id: id,
         })),
       });
-
+      if (createJobDto.imageUrls && createJobDto.imageUrls.length > 0) {
+        for (const url of createJobDto.imageUrls) {
+          const newImage = await tx.image.create({
+            data: {
+              url: url,
+            },
+          });
+          await tx.serviceImage.create({
+            data: {
+              service_id: job.id,
+              image_id: newImage.id,
+            },
+          });
+        }
+      }
       await this.escrowsService.createEscrow(userId, job.id, tx);
       return job;
     });
@@ -82,17 +97,11 @@ export class JobsService {
       `delete-pending-job-${job.id}`,
     );
 
-    await this.redisService.del(`jobs:feed:${userId}*`);
-    await this.redisService.del(`jobs:my:${userId}*`);
-    return { success: true };
+    return job;
   }
 
-  async findAll(userId: string, pagingInfo: PaginationRequestDto) {
+  async findJobCommunity(userId: string, pagingInfo: PaginationRequestDto) {
     const { queryParams, metadata } = getQueryParams(pagingInfo);
-    const cacheKey = `jobs:feed:${userId}:page:${metadata.page}:search:${pagingInfo.search || ''}`;
-
-    const cached = await this.redisService.get(cacheKey);
-    if (cached) return { ...cached, fromCache: true };
 
     const followingList = await this.prismaService.follow.findMany({
       where: { follower_id: userId },
@@ -101,6 +110,7 @@ export class JobsService {
     const followingIds = followingList.map((f) => f.followee_id);
 
     const where: Prisma.ServiceWhereInput = {
+      user_id: { not: userId },
       status: JobStatus.OPEN,
       OR: [
         { visibility: Visibility.public },
@@ -127,12 +137,35 @@ export class JobsService {
         skip: queryParams.paging.skip,
         take: queryParams.paging.take,
         orderBy: queryParams.orderBy,
+        include: {
+          user: {
+            select: {
+              id: true,
+              full_name: true,
+              avatar_url: true,
+            },
+          },
+          serviceSkills: {
+            include: {
+              skill: {
+                select: {
+                  id: true,
+                  name: true,
+                },
+              },
+            },
+          },
+        },
       }),
       this.prismaService.service.count({ where }),
     ]);
 
     const result = {
-      data: items,
+      data: items.map((item) => ({
+        ...item,
+        skills: item.serviceSkills.map((ss) => ss.skill),
+        serviceSkills: undefined,
+      })),
       metadata: {
         total,
         page: metadata.page,
@@ -141,17 +174,41 @@ export class JobsService {
       },
     };
 
-    await this.redisService.set(cacheKey, result, 30);
     return result;
   }
 
   async getJobById(userId: string, jobId: string) {
-    const cacheKey = `jobs:detail:${jobId}`;
-    const cached = await this.redisService.get(cacheKey);
-    if (cached) return cached;
-
     const job = await this.prismaService.service.findUnique({
       where: { id: jobId },
+      include: {
+        user: {
+          select: {
+            id: true,
+            full_name: true,
+            avatar_url: true,
+          },
+        },
+        serviceSkills: {
+          include: {
+            skill: {
+              select: {
+                id: true,
+                name: true,
+              },
+            },
+          },
+        },
+        serviceImages: {
+          include: {
+            image: {
+              select: {
+                id: true,
+                url: true,
+              },
+            },
+          },
+        },
+      },
     });
     if (!job) throw new NotFoundException(`Job with ID ${jobId} not found`);
 
@@ -167,17 +224,22 @@ export class JobsService {
       throw new ForbiddenException('You do not have permission');
     }
 
-    await this.redisService.set(cacheKey, job, 300);
-    return job;
+    const transformedJob = {
+      ...job,
+      skills: job.serviceSkills?.map((ss) => ss.skill) ?? [],
+      serviceImages:
+        job.serviceImages?.map((si) => ({
+          id: si.image?.id ?? si.id,
+          url: si.image?.url ?? null,
+        })) ?? [],
+      serviceSkills: undefined,
+    };
+
+    return transformedJob;
   }
 
   async getAllMyJobs(userId: string, pagingInfo: PaginationRequestDto) {
     const { queryParams, metadata } = getQueryParams(pagingInfo);
-    const cacheKey = `jobs:my:${userId}:page:${metadata.page}:search:${pagingInfo.search || ''}`;
-
-    const cached = await this.redisService.get(cacheKey);
-    if (cached) return { ...cached, fromCache: true };
-
     const where: Prisma.ServiceWhereInput = { user_id: userId };
 
     if (pagingInfo.type?.length)
@@ -191,19 +253,41 @@ export class JobsService {
         { place: { contains: keyword } },
       ];
     }
-
     const [items, total] = await Promise.all([
       this.prismaService.service.findMany({
         where,
         skip: queryParams.paging.skip,
         take: queryParams.paging.take,
         orderBy: queryParams.orderBy,
+        include: {
+          user: {
+            select: {
+              id: true,
+              full_name: true,
+              avatar_url: true,
+            },
+          },
+          serviceSkills: {
+            include: {
+              skill: {
+                select: {
+                  id: true,
+                  name: true,
+                },
+              },
+            },
+          },
+        },
       }),
       this.prismaService.service.count({ where }),
     ]);
 
     const result = {
-      data: items,
+      data: items.map((item) => ({
+        ...item,
+        skills: item.serviceSkills.map((ss) => ss.skill),
+        serviceSkills: undefined,
+      })),
       metadata: {
         total,
         page: metadata.page,
@@ -212,22 +296,111 @@ export class JobsService {
       },
     };
 
-    await this.redisService.set(cacheKey, result, 30);
+    return result;
+  }
+
+  async getAllJobs(userId: string, pagingInfo: PaginationRequestDto) {
+    const { queryParams, metadata } = getQueryParamsForAdmin(pagingInfo);
+
+    const where: Prisma.ServiceWhereInput = {};
+
+    if (pagingInfo.type?.length)
+      where.status = { in: pagingInfo.type as JobStatus[] };
+
+    if (pagingInfo.search) {
+      const keyword = pagingInfo.search.trim();
+      where.OR = [
+        { title: { contains: keyword } },
+        { description: { contains: keyword } },
+        { place: { contains: keyword } },
+      ];
+    }
+    const [items, total] = await Promise.all([
+      this.prismaService.service.findMany({
+        where,
+        skip: queryParams.paging.skip,
+        take: queryParams.paging.take,
+        orderBy: queryParams.orderBy,
+        include: {
+          serviceSkills: {
+            include: {
+              skill: {
+                select: {
+                  id: true,
+                  name: true,
+                },
+              },
+            },
+          },
+        },
+      }),
+      this.prismaService.service.count({ where }),
+    ]);
+
+    const result = {
+      data: items.map((item) => ({
+        ...item,
+        skills: item.serviceSkills.map((ss) => ss.skill),
+        serviceSkills: undefined,
+      })),
+      metadata: {
+        total,
+        page: metadata.page,
+        pageSize: metadata.pageSize,
+        totalPages: Math.ceil(total / metadata.pageSize),
+      },
+    };
+
     return result;
   }
 
   async getDetailMyJob(userId: string, jobId: string) {
-    const cacheKey = `jobs:my-detail:${userId}:${jobId}`;
-    const cached = await this.redisService.get(cacheKey);
-    if (cached) return cached;
-
     const job = await this.prismaService.service.findUnique({
       where: { id: jobId, user_id: userId },
+      include: {
+        user: {
+          select: {
+            id: true,
+            full_name: true,
+            avatar_url: true,
+          },
+        },
+        serviceSkills: {
+          include: {
+            skill: {
+              select: {
+                id: true,
+                name: true,
+              },
+            },
+          },
+        },
+        serviceImages: {
+          include: {
+            image: {
+              select: {
+                id: true,
+                url: true,
+              },
+            },
+          },
+        },
+      },
     });
-    if (!job) throw new NotFoundException(`Job with ID ${jobId} not found`);
 
-    await this.redisService.set(cacheKey, job, 300);
-    return job;
+    if (!job) throw new NotFoundException(`Job with ID ${jobId} not found`);
+    const transformedJob = {
+      ...job,
+      skills: job.serviceSkills?.map((ss) => ss.skill) ?? [],
+      serviceImages:
+        job.serviceImages?.map((si) => ({
+          id: si.image?.id ?? si.id,
+          url: si.image?.url ?? null,
+        })) ?? [],
+      serviceSkills: undefined,
+    };
+
+    return transformedJob;
   }
 
   async updateMyJob(userId: string, jobId: string, updateJobDto: CreateJobDto) {
@@ -264,10 +437,6 @@ export class JobsService {
       });
     });
 
-    await this.redisService.del(`jobs:detail:${jobId}`);
-    await this.redisService.del(`jobs:my-detail:${userId}:${jobId}`);
-    await this.redisService.del(`jobs:my:${userId}*`);
-
     return { data: true };
   }
 
@@ -283,11 +452,6 @@ export class JobsService {
       data: { status: JobStatus.CANCELLED },
     });
 
-    await this.redisService.del(`jobs:detail:${jobId}`);
-    await this.redisService.del(`jobs:my-detail:${userId}:${jobId}`);
-    await this.redisService.del(`jobs:my:${userId}*`);
-    await this.redisService.del(`jobs:feed:${userId}*`);
-
     return { data: true };
   }
 
@@ -302,5 +466,37 @@ export class JobsService {
       where: { id: jobId },
       data: { status },
     });
+  }
+
+  async blockJobById(jobId: string) {
+    const existingJob = this.prismaService.service.findUnique({
+      where: {
+        id: jobId,
+      },
+    });
+
+    if (!existingJob) throw new NotFoundException('Not found');
+
+    await this.prismaService.service.update({
+      where: {
+        id: jobId,
+        status: JobStatus.OPEN || JobStatus.MATCHED,
+      },
+      data: {
+        status: JobStatus.BANNED,
+      },
+    });
+  }
+
+  async unblockJobById(jobId: string) {
+    const existingJob = await this.prismaService.service.findUnique({
+      where: { id: jobId },
+    });
+    if (!existingJob) throw new NotFoundException('Job not found');
+    await this.prismaService.service.update({
+      where: { id: jobId },
+      data: { status: JobStatus.OPEN },
+    });
+    return { success: true };
   }
 }
