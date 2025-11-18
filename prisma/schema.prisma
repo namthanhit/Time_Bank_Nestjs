@@ -472,7 +472,9 @@ model Rating {
   booking Booking @relation(fields: [booking_id], references: [id], onDelete: Cascade)
   rater   User    @relation("RaterRatings", fields: [rater_id], references: [id], onDelete: Cascade)
   ratee   User    @relation("RateeRatings", fields: [ratee_id], references: [id], onDelete: Cascade)
+  ratingImages RatingImage[]
 }
+
 
 model ServiceImage {
   id         String   @id @default(cuid())
@@ -492,12 +494,27 @@ model Image {
   alt_text    String?  @db.VarChar(255)
   created_at  DateTime @default(now())
   updated_at  DateTime @default(now()) @updatedAt
+
   serviceImages ServiceImage[]
+  ratingImages  RatingImage[]
 }
 
+model RatingImage {
+  id         String   @id @default(cuid())
+  rating_id  String
+  image_id   String
+  created_at DateTime @default(now())
+
+  rating Rating @relation(fields: [rating_id], references: [id], onDelete: Cascade)
+  image  Image  @relation(fields: [image_id], references: [id], onDelete: Cascade)
+
+  @@unique([rating_id, image_id])
+}
+
+
 enum NotificationType {
-  TRANSFER_OUT   // A: đã chuyển thành công
-  TRANSFER_IN    // B: đã nhận được
+  TRANSFER_OUT  
+  TRANSFER_IN    
   SYSTEM_ALERT
 }
 
