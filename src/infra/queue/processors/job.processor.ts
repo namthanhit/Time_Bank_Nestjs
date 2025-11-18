@@ -58,6 +58,7 @@ export class JobStatusProcessor {
           'update-job-to-completed',
           { jobId: jobId },
           updated.preferred_start.getTime() - Date.now() + updated.time * 1000,
+          `update-job-to-completed-${jobId}`
         );
       } else {
         this.logger.warn(

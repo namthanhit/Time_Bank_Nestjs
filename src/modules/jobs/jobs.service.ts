@@ -649,8 +649,12 @@ export class JobsService {
       where: { service_id: job.id },
     });
 
-    await Promise.all( bookings.map(book => this.queueService.removeJob(`check-no-show-${book.id}`)) );
-    await this.queueService.removeJob(`update-job-to-matched-${job.id}`)
+    await Promise.all(
+      bookings.map((book) =>
+        this.queueService.removeJob(`check-no-show-${book.id}`),
+      ),
+    );
+    await this.queueService.removeJob(`update-job-to-matched-${job.id}`);
 
     return { data: true };
   }
@@ -669,7 +673,7 @@ export class JobsService {
   }
 
   async blockJobById(jobId: string) {
-    const existingJob = this.prismaService.service.findUnique({
+    const existingJob = await this.prismaService.service.findUnique({
       where: {
         id: jobId,
       },
@@ -680,12 +684,62 @@ export class JobsService {
     await this.prismaService.service.update({
       where: {
         id: jobId,
-        status: JobStatus.OPEN || JobStatus.MATCHED,
       },
       data: {
         status: JobStatus.BANNED,
       },
     });
+
+    await this.prismaService.$transaction(async (tx) => {
+      await tx.service.update({
+        where: { id: jobId },
+        data: { status: JobStatus.CANCELLED },
+      });
+
+      await tx.offer.updateMany({
+        where: { service_id: existingJob.id },
+        data: {
+          status: OfferStatus.cancelled,
+        },
+      });
+
+      await tx.booking.updateMany({
+        where: { service_id: existingJob.id },
+        data: { status: BookingStatus.cancelled },
+      });
+
+      const escrowWallet = await tx.escrowWallet.findUnique({
+        where: { job_id: existingJob.id },
+      });
+      if (!escrowWallet) throw new NotFoundException('escrowWallet not found');
+
+      await this.transferService.transferFromEscrowToProvider(
+        escrowWallet.id,
+        existingJob.user_id,
+        escrowWallet.secs,
+        tx,
+      );
+    });
+
+    const bookings = await this.prismaService.booking.findMany({
+      where: { service_id: existingJob.id },
+    });
+
+    await Promise.all(
+      bookings.map((book) =>
+        this.queueService.removeJob(`check-no-show-${book.id}`),
+      ),
+    );
+    await this.queueService.removeJob(
+      `update-job-to-matched-${existingJob.id}`,
+    );
+    if (existingJob.status == JobStatus.MATCHED){
+      await this.queueService.removeJob(
+        `update-job-to-completed-${existingJob.id}`
+      );
+    }
+
+    return { success: true };
   }
 
   async unblockJobById(jobId: string) {
