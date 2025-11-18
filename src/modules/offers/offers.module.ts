@@ -6,9 +6,10 @@ import { JobsService } from '../jobs/jobs.service';
 import { BookingsService } from '../bookings/bookings.service';
 import { EscrowsModule } from '../escrows/escrows.module';
 import { TransferModule } from '../transfer/transfer.module';
+import { NotificationsModule } from '../notifications/notifications.module';
 
 @Module({
-  imports: [EscrowsModule, TransferModule],
+  imports: [EscrowsModule, TransferModule, NotificationsModule],
   controllers: [OffersController],
   providers: [OffersService, RedisService, JobsService, BookingsService],
   exports: [OffersService],
