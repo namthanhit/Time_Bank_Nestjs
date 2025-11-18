@@ -334,6 +334,7 @@ export class TransferService {
         'update-job-to-matched',
         { jobId: dto.jobId },
         delay,
+        `update-job-to-matched-${job.id}`
       );
     }
 
