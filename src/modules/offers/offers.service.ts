@@ -7,9 +7,10 @@ import { PrismaService } from 'src/infra/prisma/prisma.service';
 import { RedisService } from 'src/infra/redis/redis.service';
 import { JobsService } from '../jobs/jobs.service';
 import { OfferDto, UpdateOfferDto } from './typings/offers.dto';
-import { BookingStatus, OfferStatus, Prisma } from '@prisma/client';
+import { NotificationType, OfferStatus, Prisma } from '@prisma/client'; 
 import { BookingsService } from '../bookings/bookings.service';
 import { JobStatus } from '../jobs/typings/job.enum';
+import { NotificationsService } from '../notifications/notifications.service'; 
 
 @Injectable()
 export class OffersService {
@@ -18,6 +19,7 @@ export class OffersService {
     private readonly redisService: RedisService,
     private readonly jobsService: JobsService,
     private readonly bookingService: BookingsService,
+    private readonly notificationsService: NotificationsService,
   ) {}
 
   async createOffer(userId: string, dto: OfferDto) {
@@ -35,7 +37,29 @@ export class OffersService {
       ...(dto.note?.trim() && { note: dto.note.trim() }),
     };
 
-    await this.prismaService.offer.create({ data });
+    const newOffer = await this.prismaService.offer.create({ 
+      data,
+      select: { id: true, user_id: true }
+    }); 
+
+    const offeringUser = await this.prismaService.user.findUnique({
+      where: { id: userId },
+      select: { full_name: true }
+    });
+    await this.notificationsService.createOnceAndPush({
+      userId: job.user_id,
+      title: 'Đã nhận được Offer mới',
+      body: `${offeringUser?.full_name || 'Một người dùng mới'} vừa gửi Offer cho công việc "${job.title}".`,
+      type: NotificationType.OFFER_RECEIVED,
+      data: { 
+        jobId: job.id,
+        offerId: newOffer.id,
+        offeringUserId: userId,
+        offeringUserName: offeringUser?.full_name || 'Người dùng',
+        createdAt: new Date().toISOString(), 
+      },
+      dedupeKey: `offer:${newOffer.id}:received`,
+    });
 
     return { success: true };
   }
@@ -130,6 +154,12 @@ export class OffersService {
           user_id: userId,
         },
       },
+      select: {
+        id: true,
+        service_id: true,
+        user_id: true, 
+        note: true,
+      }
     });
     if (!offerForMyJob)
       throw new NotFoundException(
@@ -140,6 +170,7 @@ export class OffersService {
       where: {
         id: offerForMyJob.service_id,
       },
+      select: { id: true, title: true }
     });
     if (!service) throw new NotFoundException('Not found service');
 
@@ -157,23 +188,37 @@ export class OffersService {
       offerId,
       jobId,
     );
+    
+    const jobOwner = await this.prismaService.user.findUnique({
+        where: { id: userId },
+        select: { full_name: true }
+    });
 
-    // chấp nhận yêu cầu offer vào job
     if (dto.status === OfferStatus.accepted) {
       await this.prismaService.$transaction(async (tx) => {
         await tx.offer.update({
-          where: {
-            id: offerForMyJob.id,
-          },
-          data: {
-            status: OfferStatus.accepted,
-          },
+          where: { id: offerForMyJob.id, },
+          data: { status: OfferStatus.accepted, },
         });
         await this.bookingService.createBooking(
           service.id,
           offerForMyJob.id,
           tx,
         );
+
+        await this.notificationsService.createOnceAndPush({
+          userId: offerForMyJob.user_id,
+          title: 'Offer của bạn đã được chấp nhận!',
+          body: `Chủ job ${jobOwner?.full_name || 'của bạn'} đã chấp nhận Offer cho công việc "${service.title}".`,
+          type: NotificationType.OFFER_ACCEPTED,
+          data: { 
+            jobId: service.id, 
+            offerId: offerForMyJob.id, 
+            jobTitle: service.title,
+            createdAt: new Date().toISOString(),
+          },
+          dedupeKey: `offer:${offerForMyJob.id}:accepted`,
+        });
       });
     } else if (dto.status === OfferStatus.cancelled) {
       await this.prismaService.$transaction(async (tx) => {
@@ -204,7 +249,7 @@ export class OffersService {
     jobId: string,
     dto: UpdateOfferDto,
   ) {
-    const { offerForMyJob } = await this.validateOffer(userId, offerId, jobId);
+    const { offerForMyJob, service } = await this.validateOffer(userId, offerId, jobId);
 
     if (dto.status === OfferStatus.rejected) {
       await this.prismaService.offer.update({
@@ -215,6 +260,21 @@ export class OffersService {
           status: OfferStatus.rejected,
         },
       });
+
+    
+      await this.notificationsService.createOnceAndPush({
+          userId: offerForMyJob.user_id,
+          title: 'Offer của bạn đã bị từ chối',
+          body: `Offer của bạn cho công việc "${service.title}" đã bị từ chối.`,
+          type: NotificationType.OFFER_REJECTED,
+          data: { 
+            jobId: service.id, 
+            offerId: offerForMyJob.id, 
+            jobTitle: service.title,
+            createdAt: new Date().toISOString(), 
+          },
+          dedupeKey: `offer:${offerForMyJob.id}:rejected`,
+        });
     } else if (dto.status === OfferStatus.accepted) {
       await this.prismaService.offer.update({
         where: {

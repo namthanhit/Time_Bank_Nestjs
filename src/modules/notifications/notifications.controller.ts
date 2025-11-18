@@ -43,6 +43,14 @@ export class NotificationsController {
 
   @Get('unread-count')
     getUnreadCount(@UserId() userId: string) {
-    return this.notifications.getUnreadCount(userId); // Trả về { count: number }
+    return this.notifications.getUnreadCount(userId);
+  }
+
+  @Get('general') 
+  async listGeneral(
+    @UserId() userId: string,
+    @Query('cursor') cursor?: string,
+  ) {
+    return this.notifications.listGeneralNotifications(userId, cursor);
   }
 }

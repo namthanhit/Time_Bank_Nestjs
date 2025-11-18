@@ -14,7 +14,6 @@ export class NotificationsService {
 
   /** format giây -> HH:mm:ss (HH là tổng giờ, có thể > 24) */
   private hms(secs: number): string {
-    // ... (Giữ nguyên logic hms của bạn)
     const s = Math.max(0, Math.floor(secs));
     const hh = Math.floor(s / 3600);
     const mm = Math.floor((s % 3600) / 60);
@@ -26,8 +25,7 @@ export class NotificationsService {
   /**
    * Tạo 1 thông báo (idempotent theo (user_id, dedupe_key)):
    */
-  private async createOnceAndPush(params: {
-    // ... (Giữ nguyên toàn bộ logic createOnceAndPush của bạn)
+  async createOnceAndPush(params: {
     userId: string;
     title: string;
     body: string;
@@ -70,15 +68,22 @@ export class NotificationsService {
     if (!tokenRow?.token) return;
 
     // 3) Gửi FCM (best-effort)
+    const isTransfer = params.type === NotificationType.TRANSFER_OUT || params.type === NotificationType.TRANSFER_IN;
+    
     try {
       await this.firebase.messaging().send({
         token: tokenRow.token,
         notification: { title: params.title, body: params.body },
         data: {
-          kind: 'TRANSFER',
-          subtype:
-            params.type === NotificationType.TRANSFER_OUT ? 'OUT' : 'IN',
+    
+          kind: isTransfer ? 'TRANSFER' : 'GENERAL', 
+   
+          subtype: isTransfer 
+            ? (params.type === NotificationType.TRANSFER_OUT ? 'OUT' : 'IN')
+            : params.type.toString(), 
+            
           notificationId: notif.id,
+    
           ...(Object.fromEntries(
             Object.entries(params.data ?? {}).map(([k, v]) => [k, String(v)]),
           )),
@@ -95,7 +100,6 @@ export class NotificationsService {
    * Gửi cặp thông báo chuyển khoản:
    */
   async pushTransferPair(transfer: {
-    // ... (Giữ nguyên toàn bộ logic pushTransferPair của bạn)
     id: string;
     senderUserId: string;
     receiverUserId: string;
@@ -180,7 +184,6 @@ export class NotificationsService {
 
   /** Danh sách “Biến động” (transfer in/out) */
   async listActivity(userId: string, cursor?: string, take = 20) {
-    // ... (Giữ nguyên logic listActivity của bạn)
     return this.prisma.notification.findMany({
       where: {
         user_id: userId,
@@ -205,23 +208,20 @@ export class NotificationsService {
     return { ok: true };
   }
 
-  // ===== BẮT ĐẦU SỬA LỖI =====
 
   /** Lưu/ cập nhật token FCM từ client sau đăng nhập */
   async setFcmToken(userId: string, token: string) {
     if (!token) return { ok: true };
     
     await this.prisma.$transaction([
-      // BƯỚC 1: Hủy kích hoạt token này ở BẤT KỲ user nào khác (User A)
       this.prisma.fcmToken.updateMany({
         where: {
-          token: token,             // Tìm chính xác token này...
-          user_id: { not: userId }  // ...ở bất kỳ user nào KHÁC user hiện tại
+          token: token,             
+          user_id: { not: userId } 
         },
-        data: { is_active: false }, // ...và hủy kích hoạt nó
+        data: { is_active: false }, 
       }),
 
-      // BƯỚC 2: Kích hoạt (hoặc tạo mới) token cho user hiện tại (User B)
       this.prisma.fcmToken.upsert({
         where: { user_id_token: { user_id: userId, token } },
         update: { is_active: true, last_seen: new Date() },
@@ -231,9 +231,7 @@ export class NotificationsService {
     return { ok: true };
   }
   
-  // ===== THÊM HÀM NÀY (ĐỂ GỌI KHI LOGOUT) =====
-  
-  /** Vô hiệu hóa token (dùng khi logout) */
+
   async deactivateFcmToken(userId: string, token: string) {
     if (!token) return { ok: true };
     await this.prisma.fcmToken.updateMany({
@@ -248,5 +246,19 @@ export class NotificationsService {
       where: { user_id: userId, read: false },
     });
     return { count };
+  }
+
+  async listGeneralNotifications(userId: string, cursor?: string, take = 20) {
+    return this.prisma.notification.findMany({
+      where: {
+        user_id: userId,
+        type: {
+          notIn: [NotificationType.TRANSFER_OUT, NotificationType.TRANSFER_IN],
+        },
+      },
+      orderBy: { created_at: 'desc' },
+      take,
+      ...(cursor ? { skip: 1, cursor: { id: cursor } } : {}),
+    });
   }
 }
