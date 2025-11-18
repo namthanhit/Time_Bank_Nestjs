@@ -42,8 +42,8 @@ export function getQueryParams(
 
   const queryParamsResult: QueryParams = {
     paging: {
-      skip: 0,// page > 0 ? (page - 1) * pageSize : 0,
-      take: page * pageSize, //pageSize > 0 ? pageSize : 10,
+      skip: 0,
+      take: page * pageSize,
     },
     orderBy: sortBy ? { [`${sortBy}`]: sortOrder } : { [sortBy]: sortOrder },
   };

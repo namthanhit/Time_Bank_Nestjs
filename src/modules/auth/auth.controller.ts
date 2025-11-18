@@ -3,6 +3,9 @@ import { AuthService } from './auth.service';
 import { LoginAdminDto, LoginDto } from './dtos/login.dto';
 import { RefreshDto } from './dtos/refresh.dto';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
+import { UserId } from '../../common/decorators/user-id.decorator';
+import { ChangePasswordDto } from './dtos/change-password.dto';
+import { ChangePinDto } from './dtos/change-pin.dto';
 
 @Controller('auth')
 export class AuthController {
@@ -60,5 +63,19 @@ export class AuthController {
   async logoutAll(@Req() req: any) {
     const userId = String(req.user.sub);
     return this.authService.logoutAll(userId);
+  }
+
+  @UseGuards(JwtAuthGuard)
+  @Post('change-password')
+  @HttpCode(200)
+  async changePassword(@UserId() userId: string, @Body() dto: ChangePasswordDto) {
+    return this.authService.changePassword(userId, dto.current_password, dto.new_password);
+  }
+
+  @UseGuards(JwtAuthGuard)
+  @Post('change-pin')
+  @HttpCode(200)
+  async changePin(@UserId() userId: string, @Body() dto: ChangePinDto) {
+    return this.authService.changePin(userId, dto.new_pin, dto.current_pin);
   }
 }

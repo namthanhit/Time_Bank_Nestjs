@@ -13,6 +13,18 @@ enum WalletStatus {
   closed
 }
 
+enum ReportTarget {
+  user
+  service
+}
+
+enum ReportStatus {
+  pending
+  reviewing
+  resolved
+  rejected
+}
+
 enum EscrowWalletStatus {
   released
   pending
@@ -138,20 +150,21 @@ model User {
   verification_codes VerificationCode[]
   signup_sessions    SignupSession[]
   refresh_tokens     RefreshToken[]
+ 
 
-  following         Follow[]       @relation("UserFollows")
-  followers         Follow[]       @relation("UserFollowed")
-  Wallet            Wallet[]
-  UserSkill         UserSkill[]
-  Service           Service[]
-  Offer             Offer[]
-  favorites         Favorite[]
-  requesterBookings Booking[]      @relation("RequesterBookings")
-  providerBookings  Booking[]      @relation("ProviderBookings")
-  rateeRatings      Rating[]       @relation("RateeRatings")
-  raterRatings      Rating[]       @relation("RaterRatings")
-  notifications     Notification[]
-  fcm_tokens        FcmToken[]
+  following Follow[] @relation("UserFollows")
+  followers Follow[] @relation("UserFollowed")
+  Wallet Wallet[]
+  UserSkill UserSkill[]
+  Service Service[]
+  Offer Offer[]
+  favorites Favorite[]
+  requesterBookings Booking[] @relation("RequesterBookings")
+  providerBookings Booking[] @relation("ProviderBookings")
+  rateeRatings Rating[] @relation("RateeRatings")
+  raterRatings Rating[] @relation("RaterRatings")
+  notifications Notification[]
+  fcm_tokens    FcmToken[]
 }
 
 model UserDetail {

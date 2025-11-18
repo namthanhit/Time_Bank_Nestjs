@@ -16,6 +16,7 @@ import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { UserId } from '../../common/decorators/user-id.decorator';
 import { AdminGuard } from 'src/common/guards/admin-guard';
 import { FollowsService } from '../follows/follows.service';
+import { PaginationRequestDto, PaginationTransformPipe } from './typings/pagination.dto';
 
 @Controller('users')
 export class UsersController {
@@ -23,11 +24,15 @@ export class UsersController {
     private readonly usersService: UsersService,
     private readonly followsService: FollowsService,
   ) {}
+
   // Lấy danh sách tất cả người dùng (chỉ dành cho admin)
   @Get()
   @UseGuards(JwtAuthGuard, AdminGuard)
-  findAll() {
-    return this.usersService.findAll();
+  findAll(
+    @UserId() userId: string,
+    @Query(new PaginationTransformPipe()) pagingInfo: PaginationRequestDto,
+  ) {
+    return this.usersService.findAll(userId, pagingInfo);
   }
 
   // Chỉ lấy hồ sơ của chính mình
