@@ -1,52 +1,42 @@
 import { Injectable, BadRequestException, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../../infra/prisma/prisma.service'; 
 import { CreateRatingDto } from './dtos/create-rating.dto';
-import { BookingStatus } from '@prisma/client';
 
 @Injectable()
 export class RatingService {
   constructor(private prisma: PrismaService) {}
 
-async getPendingRatings(userId: string) {
-  console.log('Current User ID:', userId); 
-
-  const bookings = await this.prisma.booking.findMany({
-    where: {
-    
-      status: 'completed', 
-   
-      OR: [
-        { requester_id: userId },
-        { provider_id: userId },
-      ],
-    
-      ratings: {
-        none: {
-          rater_id: userId,
-        },
-      },
-    },
-    include: {
-      service: {
-        include: {
-          serviceSkills: {
-            include: { skill: true }, 
+  async getPendingRatings(userId: string) {
+    const bookings = await this.prisma.booking.findMany({
+      where: {
+        status: 'completed',
+        requester_id: userId, 
+        ratings: {
+          none: {
+            rater_id: userId,
           },
         },
       },
-      requester: { select: { id: true, full_name: true, avatar_url: true } },
-      provider: { select: { id: true, full_name: true, avatar_url: true } },
-    },
-    orderBy: { created_at: 'desc' },
-  });
+      include: {
+        service: {
+          include: {
+            serviceSkills: {
+              include: { skill: true },
+            },
+          },
+        },
+        provider: { select: { id: true, full_name: true, avatar_url: true } },
+      },
+      orderBy: { created_at: 'desc' },
+    });
 
-  return bookings.map((booking) => this.mapBookingToResponse(booking, userId));
-}
+    return bookings.map((booking) => this.mapBookingToResponse(booking));
+  }
 
   async getRatingHistory(userId: string) {
     const ratings = await this.prisma.rating.findMany({
       where: {
-        rater_id: userId,
+        rater_id: userId, 
       },
       include: {
         booking: {
@@ -56,24 +46,21 @@ async getPendingRatings(userId: string) {
                 serviceSkills: { include: { skill: true } },
               },
             },
-            requester: { select: { id: true, full_name: true, avatar_url: true } },
             provider: { select: { id: true, full_name: true, avatar_url: true } },
           },
         },
         ratingImages: {
-          include: {
-            image: true, 
-          },
+          include: { image: true },
         },
       },
       orderBy: { created_at: 'desc' },
     });
 
     return ratings.map((rating) => {
-      const bookingData = this.mapBookingToResponse(rating.booking, userId);
+      const bookingData = this.mapBookingToResponse(rating.booking);
 
       return {
-        ...bookingData, 
+        ...bookingData,
         rating_id: rating.id,
         stars: rating.stars,
         comment: rating.comment,
@@ -89,19 +76,13 @@ async getPendingRatings(userId: string) {
     });
 
     if (!booking) throw new NotFoundException('Booking not found');
-    if (booking.status !== BookingStatus.completed) {
+    if (booking.status !== 'completed') {
       throw new BadRequestException('Chỉ có thể đánh giá các công việc đã hoàn thành');
     }
-
-    let rateeId = '';
-    if (booking.requester_id === userId) {
-      rateeId = booking.provider_id; 
-    } else if (booking.provider_id === userId) {
-      rateeId = booking.requester_id;
-    } else {
-      throw new BadRequestException('Bạn không tham gia vào booking này');
+    if (booking.requester_id !== userId) {
+      throw new BadRequestException('Bạn không có quyền đánh giá (Chỉ chủ công việc mới được đánh giá)');
     }
-
+    const rateeId = booking.provider_id;
     const existingRating = await this.prisma.rating.findFirst({
       where: {
         booking_id: dto.booking_id,
@@ -112,20 +93,24 @@ async getPendingRatings(userId: string) {
     if (existingRating) {
       throw new BadRequestException('Bạn đã đánh giá công việc này rồi');
     }
-
-    const imageConnections = dto.image_ids?.map((imgId) => ({
-       image: { connect: { id: imgId } }
+    const imageCreates = dto.image_urls?.map((url) => ({
+       image: { 
+         create: { 
+           url: url, 
+           alt_text: 'Rating Image' 
+         } 
+       }
     })) || [];
 
     return this.prisma.rating.create({
       data: {
         booking_id: dto.booking_id,
-        rater_id: userId,
-        ratee_id: rateeId,
+        rater_id: userId,      
+        ratee_id: rateeId,     
         stars: dto.stars,
         comment: dto.comment,
         ratingImages: {
-          create: imageConnections,
+          create: imageCreates,
         },
       },
       include: {
@@ -136,25 +121,23 @@ async getPendingRatings(userId: string) {
     });
   }
 
-  private mapBookingToResponse(booking: any, currentUserId: string) {
-    const isRequester = booking.requester_id === currentUserId;
-    const partner = isRequester ? booking.provider : booking.requester;
-    const skills = booking.service.serviceSkills?.map((ss: any) => ss.skill.name) || [];
+  private mapBookingToResponse(booking: any) {
+    const partner = booking.provider;
+    const skills = booking.service.serviceSkills
+      ?.map((ss: any) => ss.skill?.name)
+      .filter((name: string) => !!name) || [];
 
     return {
       booking_id: booking.id,
       service_id: booking.service.id,
       service_title: booking.service.title,
-
-      partner_id: partner.id,
-      partner_name: partner.full_name,
-      partner_avatar: partner.avatar_url,
- 
-      start_at: booking.start_at,     
-      duration_secs: booking.secs_booked, 
+      partner_id: partner?.id,
+      partner_name: partner?.full_name,
+      partner_avatar: partner?.avatar_url,
+      start_at: booking.start_at,
+      duration_secs: booking.secs_booked,
       place: booking.place || booking.service.place,
-      
-      skills: skills, 
+      skills: skills,
       status: booking.status,
     };
   }

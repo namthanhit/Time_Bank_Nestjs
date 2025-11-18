@@ -16,6 +16,6 @@ export class CreateRatingDto {
 
   @IsOptional()
   @IsArray()
-  @IsString({ each: true }) 
-  image_ids?: string[];
+  @IsString({ each: true })
+  image_urls?: string[];
 }
