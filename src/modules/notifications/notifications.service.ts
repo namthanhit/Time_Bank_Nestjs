@@ -242,4 +242,11 @@ export class NotificationsService {
     });
     return { ok: true };
   }
+
+  async getUnreadCount(userId: string): Promise<{ count: number }> {
+    const count = await this.prisma.notification.count({
+      where: { user_id: userId, read: false },
+    });
+    return { count };
+  }
 }

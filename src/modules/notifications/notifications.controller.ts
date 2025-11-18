@@ -33,11 +33,16 @@ export class NotificationsController {
     return this.notifications.markRead(userId, body.ids ?? []);
   }
 
-    @Patch('fcm-token/deactivate')
+  @Patch('fcm-token/deactivate')
     async deactivateFcmToken(
         @UserId() userId: string,
         @Body() body: { token: string },
     ) {
         return this.notifications.deactivateFcmToken(userId, body.token);
-    }
+  }
+
+  @Get('unread-count')
+    getUnreadCount(@UserId() userId: string) {
+    return this.notifications.getUnreadCount(userId); // Trả về { count: number }
+  }
 }
