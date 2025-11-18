@@ -12,10 +12,13 @@ import {
   getQueryParams,
   getQueryParamsForAdmin,
 } from 'src/utils/get-query-params';
-import { Prisma, Visibility } from '@prisma/client';
+import { BookingStatus, OfferStatus, Prisma, Visibility } from '@prisma/client';
 import { QueueService } from 'src/infra/queue/queue.service';
 import { EscrowsService } from '../escrows/escrows.service';
-import { TWENTY_FOUR_HOURS_MS } from 'src/common/constants';
+import {
+  TIME_ALLOWED_TO_CANCEL_SERVICE,
+  TWENTY_FOUR_HOURS_MS,
+} from 'src/common/constants';
 import { TransferService } from '../transfer/transfer.service';
 import { TransferToEscrowDto } from '../transfer/dtos/create-transfer.dto';
 
@@ -539,7 +542,7 @@ export class JobsService {
             },
           });
         }
-      } else if (dto.imageUrls !== undefined){
+      } else if (dto.imageUrls !== undefined) {
         await trx.serviceImage.deleteMany({ where: { service_id: jobId } });
       }
     };
@@ -599,15 +602,55 @@ export class JobsService {
 
   async cancelJob(userId: string, jobId: string) {
     const job = await this.prismaService.service.findUnique({
-      where: { id: jobId, user_id: userId },
+      where: { id: jobId },
     });
-
     if (!job) throw new NotFoundException(`Job with ID ${jobId} not found`);
 
-    await this.prismaService.service.update({
-      where: { id: jobId, user_id: userId },
-      data: { status: JobStatus.CANCELLED },
+    const checkTime = new Date(job.preferred_start!).getTime() - Date.now();
+
+    if (
+      job.status == JobStatus.OPEN &&
+      checkTime >= TIME_ALLOWED_TO_CANCEL_SERVICE
+    ) {
+      await this.prismaService.$transaction(async (tx) => {
+        await tx.service.update({
+          where: { id: jobId, user_id: userId },
+          data: { status: JobStatus.CANCELLED },
+        });
+
+        await tx.offer.updateMany({
+          where: { service_id: job.id },
+          data: {
+            status: OfferStatus.cancelled,
+          },
+        });
+
+        await tx.booking.updateMany({
+          where: { service_id: job.id },
+          data: { status: BookingStatus.cancelled },
+        });
+
+        const escrowWallet = await tx.escrowWallet.findUnique({
+          where: { job_id: job.id },
+        });
+        if (!escrowWallet)
+          throw new NotFoundException('escrowWallet not found');
+
+        await this.transferService.transferFromEscrowToProvider(
+          escrowWallet.id,
+          userId,
+          escrowWallet.secs,
+          tx,
+        );
+      });
+    }
+
+    const bookings = await this.prismaService.booking.findMany({
+      where: { service_id: job.id },
     });
+
+    await Promise.all( bookings.map(book => this.queueService.removeJob(`check-no-show-${book.id}`)) );
+    await this.queueService.removeJob(`update-job-to-matched-${job.id}`)
 
     return { data: true };
   }

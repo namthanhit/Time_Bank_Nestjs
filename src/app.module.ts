@@ -15,6 +15,7 @@ import { FirebaseModule } from './infra/firebase/firebase.module';
 import { BookingsModule } from './modules/bookings/bookings.module';
 import { QueueModule } from './infra/queue/queue.module';
 import { EscrowsModule } from './modules/escrows/escrows.module';
+import { RatingsModule } from './modules/ratings/ratings.module';
 import { NotificationsModule } from './modules/notifications/notifications.module';
 import { FollowsModule } from './modules/follows/follows.module';
 import { ForgotPasswordModule } from './modules/forgot-password/forgot-password.module';
@@ -39,6 +40,7 @@ import { ReportsModule } from './modules/reports/reports.module';
     AuthModule,
     BookingsModule,
     EscrowsModule,
+    RatingsModule,
     NotificationsModule,
     FollowsModule,
     ForgotPasswordModule,
