@@ -38,7 +38,7 @@ export class TransferService {
   async lookupRecipient(phone: string, fromUserId: string) {
     const to = await this.prisma.user.findUnique({
       where: { phone },
-      select: { id: true, full_name: true },
+      select: { id: true, full_name: true, avatar_url: true },
     });
     if (!to) throw new NotFoundException('Không tìm thấy người nhận');
     if (to.id === fromUserId)
