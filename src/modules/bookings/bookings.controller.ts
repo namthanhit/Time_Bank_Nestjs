@@ -10,10 +10,10 @@ export class BookingsController {
     private readonly bookingService: BookingsService
   ){}
 
-  @Post(':bookingId/check-in')
+  @Post(':jobId/check-in')
   async checkInBooking(
     @UserId() userId: string,
-    @Param('bookingId') bookingId: string
+    @Param('jobid') bookingId: string
   ) {
     return this.bookingService.checkInBooking(userId, bookingId);
   }
@@ -33,7 +33,7 @@ export class BookingsController {
     return this.bookingService.getMyListBooked(userId)
   }
 
-  @Get("count-booked")
+  @Get(":jobId/count-booked")
   async getCountBooked(
     @UserId() userId: string,
     @Param("jobId") jobId: string

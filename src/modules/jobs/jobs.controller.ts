@@ -11,7 +11,7 @@ import {
   UseGuards,
 } from '@nestjs/common';
 import { JobsService } from './jobs.service';
-import { CreateJobDto } from './typings/job.dto';
+import { ConfirmUpdateJobDto, CreateJobDto, UpdateJobDto } from './typings/job.dto';
 import { UserId } from 'src/common/decorators/user-id.decorator';
 import {
   PaginationRequestDto,
@@ -71,13 +71,21 @@ export class JobsController {
     return this.jobsService.getDetailMyJob(userId, jobId);
   }
 
-  @Put('/me/edit-job/:jobId')
+  @Post('/me/edit-job/:jobId/check-update')
   async updateMyJob(
     @UserId() userId: string,
     @Param('jobId') jobId: string,
-    @Body() updateJobDto: CreateJobDto,
+    @Body() updateJobDto: UpdateJobDto,
   ) {
-    return this.jobsService.updateMyJob(userId, jobId, updateJobDto);
+    return this.jobsService.checkUpdateJob(userId, jobId, updateJobDto);
+  }
+
+  @Post('/me/edit-job/confirm-update')
+  async confirmUpdateMyJob(
+    @UserId() userId: string,
+    @Body() dto: ConfirmUpdateJobDto,
+  ) {
+    return this.jobsService.confirmUpdateMyJobById(userId, dto.updateJobDto, dto.transferToEscrowDto);
   }
 
   @Delete('/me/delete-job/:jobId')
