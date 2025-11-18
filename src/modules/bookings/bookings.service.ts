@@ -182,9 +182,9 @@ export class BookingsService {
     return jobsBooked;
   }
 
-  async checkInBooking(providerId: string, bookingId: string) {
-    const booking = await this.prismaService.booking.findUnique({
-      where: { id: bookingId },
+  async checkInBooking(providerId: string, jobId: string) {
+    const booking = await this.prismaService.booking.findFirst({
+      where: { service_id: jobId, provider_id: providerId },
     });
 
     if (!booking) throw new NotFoundException('Booking not found');
@@ -203,7 +203,7 @@ export class BookingsService {
       throw new BadRequestException('You are late for check-in');
 
     await this.prismaService.booking.update({
-      where: { id: bookingId },
+      where: { id: booking.id },
       data: {
         status: BookingStatus.ongoing,
         check_in_time: now.toDate(),
@@ -229,7 +229,7 @@ export class BookingsService {
       },
     });
 
-    if(!count) return 0
+    if (!count) return 0;
 
     return count;
   }
