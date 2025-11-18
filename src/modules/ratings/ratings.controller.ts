@@ -3,7 +3,8 @@ import {
   Get, 
   Post, 
   Body, 
-  UseGuards 
+  UseGuards,
+  Param,
 } from '@nestjs/common';
 import { RatingService } from './ratings.service';
 import { CreateRatingDto } from './dtos/create-rating.dto';
@@ -30,5 +31,15 @@ export class RatingController {
     @Body() createRatingDto: CreateRatingDto
   ) {
     return this.ratingService.createRating(userId, createRatingDto);
+  }
+
+  @Get('user/:userId')
+  async getReceivedRatings(@Param('userId') targetUserId: string) {
+    return this.ratingService.getReceivedRatings(targetUserId);
+  }
+
+  @Get('average-star')
+  async getAverageStar(@UserId() userId: string) {
+    return this.ratingService.getAverageStar(userId);
   }
 }

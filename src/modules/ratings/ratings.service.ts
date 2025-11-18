@@ -141,4 +141,72 @@ export class RatingService {
       status: booking.status,
     };
   }
+
+  async getReceivedRatings(targetUserId: string) {
+    const ratings = await this.prisma.rating.findMany({
+      where: {
+        ratee_id: targetUserId, 
+      },
+      include: {
+        booking: {
+          include: {
+            service: {
+              include: {
+                serviceSkills: { include: { skill: true } },
+              },
+            },
+          },
+        },
+        rater: { select: { id: true, full_name: true, avatar_url: true } },
+        ratingImages: { include: { image: true } },
+      },
+      orderBy: { created_at: 'desc' },
+    });
+
+    return ratings.map((rating) => {
+      return {
+        rating_id: rating.id,
+        booking_id: rating.booking_id,
+        service_id: rating.booking.service.id,
+        service_title: rating.booking.service.title,
+        
+        partner_id: rating.rater.id,
+        partner_name: rating.rater.full_name,
+        partner_avatar: rating.rater.avatar_url,
+        
+        stars: rating.stars,
+        comment: rating.comment,
+        rated_at: rating.created_at,
+        images: rating.ratingImages.map((ri) => ri.image.url),
+
+        start_at: rating.booking.start_at,
+        duration_secs: rating.booking.secs_booked,
+        place: rating.booking.place,
+        status: 'completed',
+        skills: [], 
+      };
+    });
+  }
+
+  async getAverageStar(userId: string) {
+  const ratingAgg = await this.prisma.rating.aggregate({
+    _avg: {
+      stars: true,
+    },
+    _count: {
+      stars: true, 
+    },
+    where: {
+      ratee_id: userId,
+    },
+  });
+
+  const averageRating = ratingAgg._avg.stars || 0; 
+  const totalReviews = ratingAgg._count.stars || 0;
+
+  return {
+    rating: averageRating,
+    total_reviews: totalReviews,
+  };
+}
 }
