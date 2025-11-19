@@ -516,6 +516,10 @@ enum NotificationType {
   TRANSFER_OUT  
   TRANSFER_IN    
   SYSTEM_ALERT
+  OFFER_RECEIVED  
+  OFFER_ACCEPTED   
+  OFFER_REJECTED   
+  OFFER_CANCELLED
 }
 
 model Notification {

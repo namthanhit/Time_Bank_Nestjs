@@ -21,7 +21,7 @@ export class UsersService {
     const { queryParams, metadata } = getQueryParamsForAdmin(pagingInfo);
     const where: Prisma.UserWhereInput = {
       NOT: {
-        id: 'admin01',
+        full_name: 'admin',
       },
     };
 

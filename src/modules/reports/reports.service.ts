@@ -8,13 +8,17 @@ import {
   GetReportsAdminDto,
   UpdateReportStatusDto,
 } from './typings/reports.dto';
-import { $Enums, Prisma, ReportTarget } from '@prisma/client';
+import { $Enums, NotificationType, Prisma, ReportTarget } from '@prisma/client';
 import { PrismaService } from 'src/infra/prisma/prisma.service';
 import { getQueryParamsForAdmin } from 'src/utils/get-query-params';
+import { NotificationsService } from '../notifications/notifications.service';
 
 @Injectable()
 export class ReportsService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly notificationsService:NotificationsService
+  ) {}
 
   async createReport(reporterId: string, dto: CreateReportDto) {
     await this.validateTargetExists(dto.target_type, dto.target_id);
@@ -162,6 +166,21 @@ export class ReportsService {
         status: dto.status as $Enums.ReportStatus,
         admin_note: dto.admin_note ?? null,
       },
+    });
+
+    await this.notificationsService.createOnceAndPush({
+      userId: report.target_id,
+      title: 'Cảnh báo tới người dùng',
+      body: `${dto.admin_note}`,
+      type: NotificationType.SYSTEM_ALERT,
+      data: {
+        jobId: report.id,
+        offerId: report.target_id,
+        offeringUserId: report.target_id,
+        offeringUserName: report.reason || 'Người dùng',
+        createdAt: new Date().toISOString(),
+      },
+      dedupeKey: `report:${report.id}:received`,
     });
 
     return updated;
